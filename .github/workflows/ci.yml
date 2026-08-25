@@ -29,7 +29,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Scan files and configuration
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@0.36.0
         with:
           scan-type: fs
           scan-ref: .
@@ -64,4 +64,3 @@ jobs:
             N8N_VERSION=${{ vars.N8N_VERSION || '2.34.5' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
