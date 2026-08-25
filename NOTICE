@@ -1,5 +1,5 @@
 n8n on Snowflake
-Copyright 2026 Fabio Battaglieri
+Copyright 2026 Francesco Battaglieri
 
 This project builds on n8n Community Edition. n8n is distributed separately
 under its own Sustainable Use License and Enterprise License. This repository
@@ -8,5 +8,18 @@ explicit upstream n8n release and builds an integration image around it.
 
 Snowflake, Snowpark Container Services, Snowflake Postgres, and Cortex are
 trademarks or registered trademarks of Snowflake Inc. This project is an
-independent reference implementation and is not an official Snowflake product.
+independent reference implementation developed by Francesco Battaglieri with
+the assistance of Snowflake Cortex Code. It is not an official Snowflake
+release, product, service, publication, or support offering. Snowflake Inc. did
+not review, approve, sponsor, endorse, or warrant this project.
 
+Use of this project is entirely at the user's own risk. To the maximum extent
+permitted by applicable law, Francesco Battaglieri, Snowflake Inc., n8n GmbH,
+and their respective affiliates, employees, officers, agents, and contributors
+are not liable for any direct, indirect, incidental, special, consequential,
+exemplary, or other damages, losses, costs, claims, service interruptions, data
+loss, security incidents, or configuration errors arising from or related to
+the use, inability to use, modification, deployment, or distribution of this
+project. Users are solely responsible for reviewing the source code, validating
+it in a non-production environment, securing credentials and data, confirming
+regulatory and licensing requirements, and operating any resulting deployment.

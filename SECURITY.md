@@ -6,6 +6,8 @@ Do not open a public issue for a suspected vulnerability. Use GitHub private vul
 
 Include the affected component, reproduction steps, impact, and any proposed mitigation. Do not include live credentials, access tokens, account identifiers, private endpoint URLs, or customer data.
 
+This process is provided on a best-effort basis and does not create a warranty, support obligation, or service-level commitment. See [DISCLAIMER.md](DISCLAIMER.md).
+
 ## Security Model
 
 - GitHub Actions authenticates to Snowflake with short-lived OIDC workload identity tokens.
@@ -17,4 +19,3 @@ Include the affected component, reproduction steps, impact, and any proposed mit
 - Deployment requires manual approval by the repository maintainer.
 
 See [docs/security.md](docs/security.md) for the threat model and hardening guidance.
-
