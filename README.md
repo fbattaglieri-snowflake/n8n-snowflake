@@ -2,7 +2,7 @@
 
 Deploy n8n Community Edition to Snowpark Container Services with Snowflake Postgres, durable block storage, Snowflake-native secrets, GitHub Actions OIDC, a native Snowflake node that uses the rotating SPCS service token, and an internal OpenAI-compatible proxy for Cortex AI and the Snowflake SQL API.
 
-> **Disclaimer:** This independent project was developed and is maintained by **Francesco Battaglieri**, with the assistance of **Snowflake Cortex Code**. It is not an official Snowflake or n8n release, product, service, publication, or support offering. Snowflake Inc. and n8n GmbH did not review, approve, sponsor, endorse, certify, or warrant this project. Use is entirely at your own risk. See [DISCLAIMER.md](DISCLAIMER.md) for the full no-warranty, limitation-of-liability, and user-responsibility terms.
+> **Disclaimer:** This independent project was developed and is maintained by **Francesco Battaglieri**, with the assistance of **Snowflake Cortex Code**. It is not an official Snowflake or n8n release, product, service, publication, integration, reference architecture, or support offering. **Neither Snowflake Inc. nor n8n GmbH, nor the n8n project maintainers, reviewed, approved, sponsored, endorsed, certified, authorized, commissioned, or warranted this project.** They are not responsible for its code, documentation, security, maintenance, support, deployment, operation, or results. Use is entirely at your own risk. See [DISCLAIMER.md](DISCLAIMER.md) for the full no-warranty, limitation-of-liability, non-affiliation, and user-responsibility terms.
 
 ## Architecture
 
