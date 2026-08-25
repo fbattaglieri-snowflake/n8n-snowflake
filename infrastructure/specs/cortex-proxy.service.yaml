@@ -1,0 +1,44 @@
+spec:
+  platformMonitor:
+    metricConfig:
+      groups:
+        - system
+  containers:
+    - name: cortex-proxy
+      image: /{{ database }}/{{ schema }}/{{ proxy_image_repository }}/cortex-proxy:{{ image_tag }}
+      env:
+        CORTEX_PROXY_BIND: "0.0.0.0"
+        CORTEX_PROXY_PORT: "8080"
+        CORTEX_MODELS_PATH: "/models/models.json"
+      volumeMounts:
+        - name: models
+          mountPath: /models
+      resources:
+        requests:
+          cpu: "0.1"
+          memory: "128Mi"
+        limits:
+          cpu: "0.5"
+          memory: "512Mi"
+      readinessProbe:
+        port: 8080
+        path: /healthz
+        periodSeconds: 5
+        failureThreshold: 12
+      livenessProbe:
+        port: 8080
+        path: /healthz
+        periodSeconds: 30
+        failureThreshold: 5
+  volumes:
+    - name: models
+      source: stage
+      stageConfig:
+        name: "@{{ database }}.{{ schema }}.N8N_CONFIG"
+        metadataCache: "5m"
+  endpoints:
+    - name: api
+      port: 8080
+      public: false
+      protocol: HTTP
+

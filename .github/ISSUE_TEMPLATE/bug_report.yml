@@ -1,0 +1,29 @@
+name: Bug report
+description: Report a reproducible problem without sensitive data
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: Do not include secrets, private endpoints, account identifiers, or customer data.
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What happened and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Provide minimal reproducible steps using placeholders.
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: n8n, Snowflake CLI, and relevant image versions.
+

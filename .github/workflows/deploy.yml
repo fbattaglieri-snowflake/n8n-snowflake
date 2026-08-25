@@ -1,0 +1,126 @@
+name: Deploy to Snowflake
+
+on:
+  workflow_dispatch:
+    inputs:
+      n8n_version:
+        description: Explicit upstream n8n release
+        required: true
+        default: "2.34.5"
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: n8n-snowflake-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@v3
+      - uses: snowflakedb/snowflake-actions@v3
+        with:
+          use-oidc: true
+          cli-version: "3.16"
+      - name: Authenticate and resolve registry
+        id: registry
+        env:
+          SNOWFLAKE_ACCOUNT: ${{ vars.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_USER: ${{ vars.SNOWFLAKE_DEPLOY_USER }}
+          SNOWFLAKE_ROLE: ${{ vars.SNOWFLAKE_DEPLOY_ROLE }}
+          SNOWFLAKE_DATABASE: ${{ vars.SNOWFLAKE_DATABASE }}
+          SNOWFLAKE_SCHEMA: ${{ vars.SNOWFLAKE_SCHEMA }}
+          SNOWFLAKE_WAREHOUSE: ${{ vars.SNOWFLAKE_WAREHOUSE }}
+        run: |
+          snow connection test -x
+          registry="$(snow spcs image-registry url -x --format CSV --silent | tr -d '\r\n\"')"
+          test -n "$registry"
+          echo "registry=$registry" >> "$GITHUB_OUTPUT"
+          snow spcs image-registry token -x --format JSON \
+            | python -c 'import json,sys; print(json.load(sys.stdin)[0]["token"])' \
+            | docker login "$registry" -u 0sessiontoken --password-stdin
+      - name: Build and push immutable images
+        env:
+          REGISTRY: ${{ steps.registry.outputs.registry }}
+          DATABASE: ${{ vars.SNOWFLAKE_DATABASE }}
+          SCHEMA: ${{ vars.SNOWFLAKE_SCHEMA }}
+          N8N_REPOSITORY: ${{ vars.N8N_IMAGE_REPOSITORY }}
+          PROXY_REPOSITORY: ${{ vars.CORTEX_PROXY_IMAGE_REPOSITORY }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker buildx build --platform linux/amd64 --push \
+            --build-arg "N8N_VERSION=${{ inputs.n8n_version }}" \
+            -t "${REGISTRY}/${DATABASE,,}/${SCHEMA,,}/${N8N_REPOSITORY,,}/n8n:${IMAGE_TAG}" \
+            docker/n8n
+          docker buildx build --platform linux/amd64 --push \
+            -t "${REGISTRY}/${DATABASE,,}/${SCHEMA,,}/${PROXY_REPOSITORY,,}/cortex-proxy:${IMAGE_TAG}" \
+            proxy/cortex
+      - name: Stage specifications and model catalog
+        env:
+          SNOWFLAKE_ACCOUNT: ${{ vars.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_USER: ${{ vars.SNOWFLAKE_DEPLOY_USER }}
+          SNOWFLAKE_ROLE: ${{ vars.SNOWFLAKE_DEPLOY_ROLE }}
+          SNOWFLAKE_DATABASE: ${{ vars.SNOWFLAKE_DATABASE }}
+          SNOWFLAKE_SCHEMA: ${{ vars.SNOWFLAKE_SCHEMA }}
+        run: |
+          snow stage copy infrastructure/specs/n8n.service.yaml @N8N_CONFIG --overwrite
+          snow stage copy infrastructure/specs/cortex-proxy.service.yaml @N8N_CONFIG --overwrite
+          snow stage copy proxy/cortex/models.json @N8N_CONFIG --overwrite
+      - name: Resolve Snowflake Postgres metadata
+        id: postgres
+        env:
+          SNOWFLAKE_ACCOUNT: ${{ vars.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_USER: ${{ vars.SNOWFLAKE_DEPLOY_USER }}
+          SNOWFLAKE_ROLE: ${{ vars.SNOWFLAKE_DEPLOY_ROLE }}
+        run: |
+          snow sql -x --silent --format JSON_EXT \
+            -q "DESCRIBE POSTGRES INSTANCE ${{ vars.POSTGRES_INSTANCE }}" > postgres.json
+          python - <<'PY'
+          import json, os
+          rows = json.load(open("postgres.json"))
+          row = rows[0]
+          host = row.get("host") or row.get("HOST")
+          database = row.get("default_database") or row.get("DEFAULT_DATABASE") or "postgres"
+          if not host:
+              raise SystemExit("Postgres hostname was not returned")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write(f"host={host}\n")
+              output.write(f"database={database}\n")
+          PY
+          rm postgres.json
+      - name: Deploy services without dropping state
+        env:
+          SNOWFLAKE_ACCOUNT: ${{ vars.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_USER: ${{ vars.SNOWFLAKE_DEPLOY_USER }}
+          SNOWFLAKE_ROLE: ${{ vars.SNOWFLAKE_DEPLOY_ROLE }}
+        run: |
+          snow sql -x --local-only --filename infrastructure/sql/20_deploy.sql \
+            -D "deploy_role=${{ vars.SNOWFLAKE_DEPLOY_ROLE }}" \
+            -D "database=${{ vars.SNOWFLAKE_DATABASE }}" \
+            -D "schema=${{ vars.SNOWFLAKE_SCHEMA }}" \
+            -D "warehouse=${{ vars.SNOWFLAKE_WAREHOUSE }}" \
+            -D "compute_pool=${{ vars.N8N_COMPUTE_POOL }}" \
+            -D "n8n_image_repository=${{ vars.N8N_IMAGE_REPOSITORY }}" \
+            -D "proxy_image_repository=${{ vars.CORTEX_PROXY_IMAGE_REPOSITORY }}" \
+            -D "image_tag=${{ github.sha }}" \
+            -D "postgres_host=${{ steps.postgres.outputs.host }}" \
+            -D "postgres_database=${{ steps.postgres.outputs.database }}" \
+            -D "egress_integration=N8N_EGRESS_EAI"
+      - name: Verify deployed containers and endpoint
+        env:
+          SNOWFLAKE_ACCOUNT: ${{ vars.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_USER: ${{ vars.SNOWFLAKE_DEPLOY_USER }}
+          SNOWFLAKE_ROLE: ${{ vars.SNOWFLAKE_DEPLOY_ROLE }}
+        run: |
+          sleep 30
+          snow sql -x --local-only --filename infrastructure/sql/30_verify.sql \
+            -D "deploy_role=${{ vars.SNOWFLAKE_DEPLOY_ROLE }}" \
+            -D "database=${{ vars.SNOWFLAKE_DATABASE }}" \
+            -D "schema=${{ vars.SNOWFLAKE_SCHEMA }}"

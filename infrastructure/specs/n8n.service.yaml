@@ -1,0 +1,82 @@
+spec:
+  platformMonitor:
+    metricConfig:
+      groups:
+        - system
+  containers:
+    - name: n8n
+      image: /{{ database }}/{{ schema }}/{{ n8n_image_repository }}/n8n:{{ image_tag }}
+      env:
+        DB_TYPE: "postgresdb"
+        DB_POSTGRESDB_HOST: "{{ postgres_host }}"
+        DB_POSTGRESDB_PORT: "5432"
+        DB_POSTGRESDB_DATABASE: "{{ postgres_database }}"
+        DB_POSTGRESDB_SCHEMA: "public"
+        DB_POSTGRESDB_USER: "application"
+        DB_POSTGRESDB_SSL_ENABLED: "true"
+        DB_POSTGRESDB_SSL_REJECT_UNAUTHORIZED: "false"
+        DB_POSTGRESDB_CONNECTION_TIMEOUT: "60000"
+        N8N_HOST: "0.0.0.0"
+        N8N_PORT: "5678"
+        N8N_PROTOCOL: "https"
+        N8N_PROXY_HOPS: "1"
+        N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
+        EXECUTIONS_MODE: "regular"
+        EXECUTIONS_DATA_SAVE_ON_ERROR: "all"
+        EXECUTIONS_DATA_SAVE_ON_SUCCESS: "all"
+        EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS: "true"
+        N8N_DIAGNOSTICS_ENABLED: "false"
+        N8N_VERSION_NOTIFICATIONS_ENABLED: "true"
+        N8N_TEMPLATES_ENABLED: "true"
+        N8N_MCP_REGISTRY_ENABLED: "true"
+        GENERIC_TIMEZONE: "UTC"
+        N8N_DEFAULT_LOCALE: "en"
+        CORTEX_PROXY_URL: "http://cortex-proxy-service:8080"
+      resources:
+        requests:
+          cpu: "2"
+          memory: "8Gi"
+        limits:
+          cpu: "4"
+          memory: "24Gi"
+      volumeMounts:
+        - name: n8n-data
+          mountPath: /home/node/.n8n
+      secrets:
+        - snowflakeSecret:
+            objectName: "{{ database }}.{{ schema }}.N8N_PG_PASSWORD"
+          secretKeyRef: secret_string
+          envVarName: DB_POSTGRESDB_PASSWORD
+        - snowflakeSecret:
+            objectName: "{{ database }}.{{ schema }}.N8N_ENCRYPTION_KEY"
+          secretKeyRef: secret_string
+          envVarName: N8N_ENCRYPTION_KEY
+      readinessProbe:
+        port: 5678
+        path: /healthz
+        periodSeconds: 10
+        failureThreshold: 12
+      livenessProbe:
+        port: 5678
+        path: /healthz
+        periodSeconds: 30
+        failureThreshold: 5
+  endpoints:
+    - name: n8n-ui
+      port: 5678
+      public: true
+      protocol: HTTP
+  volumes:
+    - name: n8n-data
+      source: block
+      size: 50Gi
+      blockConfig:
+        iops: 3000
+        throughput: 125
+        encryption: SNOWFLAKE_FULL
+        snapshotOnDelete: true
+        snapshotDeleteAfter: 14d
+serviceRoles:
+  - name: user
+    endpoints:
+      - n8n-ui

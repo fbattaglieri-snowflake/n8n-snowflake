@@ -1,0 +1,59 @@
+name: Bootstrap Snowflake
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: n8n-snowflake-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    environment: bootstrap
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: snowflakedb/snowflake-actions@v3
+        with:
+          use-oidc: true
+          cli-version: "3.16"
+      - name: Create Snowflake infrastructure
+        env:
+          SNOWFLAKE_ACCOUNT: ${{ vars.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_USER: ${{ vars.SNOWFLAKE_BOOTSTRAP_USER }}
+          SNOWFLAKE_ROLE: ${{ vars.SNOWFLAKE_BOOTSTRAP_ROLE }}
+        run: |
+          snow connection test -x
+          snow sql -x --local-only --filename infrastructure/sql/10_bootstrap.sql \
+            -D "bootstrap_role=${{ vars.SNOWFLAKE_BOOTSTRAP_ROLE }}" \
+            -D "deploy_role=${{ vars.SNOWFLAKE_DEPLOY_ROLE }}" \
+            -D "database=${{ vars.SNOWFLAKE_DATABASE }}" \
+            -D "schema=${{ vars.SNOWFLAKE_SCHEMA }}" \
+            -D "warehouse=${{ vars.SNOWFLAKE_WAREHOUSE }}" \
+            -D "compute_pool=${{ vars.N8N_COMPUTE_POOL }}" \
+            -D "instance_family=${{ vars.N8N_INSTANCE_FAMILY }}" \
+            -D "n8n_image_repository=${{ vars.N8N_IMAGE_REPOSITORY }}" \
+            -D "proxy_image_repository=${{ vars.CORTEX_PROXY_IMAGE_REPOSITORY }}" \
+            -D "egress_integration=N8N_EGRESS_EAI"
+      - name: Create Snowflake Postgres securely
+        env:
+          SNOWFLAKE_ACCOUNT: ${{ vars.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_USER: ${{ vars.SNOWFLAKE_BOOTSTRAP_USER }}
+          SNOWFLAKE_ROLE: ${{ vars.SNOWFLAKE_BOOTSTRAP_ROLE }}
+        run: |
+          python scripts/bootstrap_postgres.py \
+            --instance "${{ vars.POSTGRES_INSTANCE }}" \
+            --compute-family "${{ vars.POSTGRES_COMPUTE_FAMILY }}" \
+            --storage-gb "${{ vars.POSTGRES_STORAGE_GB }}" \
+            --postgres-version 17 \
+            --ingress-cidr "${{ vars.POSTGRES_INGRESS_CIDR }}" \
+            --database "${{ vars.SNOWFLAKE_DATABASE }}" \
+            --schema "${{ vars.SNOWFLAKE_SCHEMA }}" \
+            --deploy-role "${{ vars.SNOWFLAKE_DEPLOY_ROLE }}" \
+            --egress-integration N8N_EGRESS_EAI

@@ -1,0 +1,6 @@
+# Maintainers
+
+This repository is maintained by [Fabio Battaglieri](https://github.com/fbattaglieri-snowflake).
+
+External issues, pull requests, and suggestions are welcome. Only the maintainer can approve, merge, release, or deploy changes. Repository rules, CODEOWNERS, and protected GitHub environments enforce that policy.
+
