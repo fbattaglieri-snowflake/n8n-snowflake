@@ -32,7 +32,7 @@ Do not add Postgres passwords, Snowflake private keys, Snowflake PATs, or the n8
 
 ## GitHub Environments
 
-Create `bootstrap` and `production` environments. Configure `@fbattaglieri-snowflake` as the only required reviewer. Disable administrator bypass if your GitHub plan supports it and you want approvals to be mandatory even for administrators.
+Create `bootstrap` and `production` environments. Configure the repository maintainer as the only required reviewer. Disable administrator bypass if your GitHub plan supports it and you want approvals to be mandatory even for administrators.
 
 ## Egress Policy
 
