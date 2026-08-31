@@ -65,8 +65,93 @@ def read_service_token(path: Path = TOKEN_PATH) -> str:
     return token
 
 
+def tool_content_text(content: Any) -> str:
+    """Flatten OpenAI tool-result content, which may be a string or a list of blocks."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for block in content:
+            if isinstance(block, dict) and isinstance(block.get("text"), str):
+                parts.append(block["text"])
+            elif isinstance(block, str):
+                parts.append(block)
+        return "\n".join(parts)
+    if content is None:
+        return ""
+    return json.dumps(content, separators=(",", ":"))
+
+
+def collapse_parallel_tool_calls(body: dict[str, Any]) -> dict[str, Any]:
+    """Reduce every assistant turn to a single tool call, merging the other results as text.
+
+    Cortex places each ``tool`` message in its own conversation turn, so a turn carrying N
+    tool calls arrives upstream with one ``toolResult`` for N ``toolUse`` blocks and is
+    rejected with a non-retryable HTTP 400. Agent frameworks emit parallel tool calls
+    routinely, and the rejected turn stays in the conversation history, so the failure is
+    permanent for that session. Keeping the first call and folding the remaining results
+    into its content preserves the 1:1 pairing without discarding information.
+    """
+    messages = body.get("messages")
+    if not isinstance(messages, list):
+        return body
+
+    keep_for: dict[str, str] = {}
+    names: dict[str, str] = {}
+    for message in messages:
+        if not isinstance(message, dict) or message.get("role") != "assistant":
+            continue
+        calls = message.get("tool_calls")
+        if not isinstance(calls, list) or len(calls) < 2:
+            continue
+        for call in calls:
+            function = call.get("function") if isinstance(call, dict) else None
+            name = (function or {}).get("name") if isinstance(function, dict) else None
+            names[str((call or {}).get("id"))] = str(name or "tool")
+        primary = str(calls[0].get("id"))
+        for call in calls[1:]:
+            keep_for[str(call.get("id"))] = primary
+        message["tool_calls"] = [calls[0]]
+
+    if not keep_for:
+        return body
+
+    merged: dict[str, list[str]] = {}
+    for message in messages:
+        if not isinstance(message, dict) or message.get("role") != "tool":
+            continue
+        call_id = str(message.get("tool_call_id"))
+        if call_id in keep_for:
+            label = names.get(call_id, "tool")
+            text = tool_content_text(message.get("content"))
+            merged.setdefault(keep_for[call_id], []).append(f"[{label}] {text}")
+
+    kept: list[Any] = []
+    seen_primary: set[str] = set()
+    for message in messages:
+        if isinstance(message, dict) and message.get("role") == "tool":
+            call_id = str(message.get("tool_call_id"))
+            if call_id in keep_for:
+                continue
+            extras = merged.get(call_id)
+            if extras:
+                seen_primary.add(call_id)
+                own = tool_content_text(message.get("content"))
+                message["content"] = "\n\n".join([own, *extras]) if own else "\n\n".join(extras)
+        kept.append(message)
+
+    for primary, extras in merged.items():
+        if primary not in seen_primary:
+            kept.append(
+                {"role": "tool", "tool_call_id": primary, "content": "\n\n".join(extras)}
+            )
+
+    body["messages"] = kept
+    return body
+
+
 def rewrite_chat_request(body: dict[str, Any], config: ModelConfig) -> dict[str, Any]:
-    rewritten = copy.deepcopy(body)
+    rewritten = collapse_parallel_tool_calls(copy.deepcopy(body))
     if "max_tokens" in rewritten and "max_completion_tokens" not in rewritten:
         rewritten["max_completion_tokens"] = rewritten.pop("max_tokens")
 
