@@ -125,3 +125,55 @@ def test_flattens_block_style_tool_content():
     output = MODULE.rewrite_chat_request(body, config())
     tool_messages = [m for m in output["messages"] if m["role"] == "tool"]
     assert "beta=22" in tool_messages[0]["content"]
+
+
+def stream_fragment(call_id, name, arguments, index=0):
+    delta = {"tool_calls": [{"id": call_id, "index": index, "function": {}}]}
+    if name:
+        delta["tool_calls"][0]["function"]["name"] = name
+    if arguments is not None:
+        delta["tool_calls"][0]["function"]["arguments"] = arguments
+    return json.dumps({"id": "x", "model": "model-a", "choices": [{"delta": delta}]})
+
+
+def test_reindexes_streamed_parallel_tool_calls():
+    # Cortex marks every parallel tool call with index 0, which makes a client
+    # merge them into one and leaves an orphan toolUse in the history.
+    raw = (
+        "data: " + stream_fragment("a", "alpha", "") + "\n\n"
+        "data: " + stream_fragment("", None, "{}") + "\n\n"
+        "data: " + stream_fragment("b", "beta", "") + "\n\n"
+        "data: " + stream_fragment("", None, "{}") + "\n\n"
+        "data: [DONE]\n\n"
+    ).encode()
+    output = MODULE.normalize_stream(raw).decode()
+    indexes = []
+    for line in output.splitlines():
+        if not line.startswith("data: ") or line.endswith("[DONE]"):
+            continue
+        for choice in json.loads(line[6:]).get("choices", []):
+            for fragment in (choice.get("delta") or {}).get("tool_calls") or []:
+                indexes.append(fragment["index"])
+    assert indexes == [0, 0, 1, 1]
+
+
+def test_reindex_is_idempotent_when_indexes_are_already_correct():
+    raw = (
+        "data: " + stream_fragment("a", "alpha", "", index=0) + "\n\n"
+        "data: " + stream_fragment("b", "beta", "", index=1) + "\n\n"
+        "data: [DONE]\n\n"
+    ).encode()
+    document = {"choices": [{"delta": {"tool_calls": [{"id": "a", "index": 0, "function": {}}]}}]}
+    assert MODULE.reindex_tool_calls(document, {}) is False
+    # Untouched lines keep their original serialisation, spaces included, which is
+    # the observable proof that nothing was rewritten.
+    output = MODULE.normalize_stream(raw)
+    assert b'"index": 1' in output
+    assert b'"index":1' not in output
+
+
+def test_reindex_leaves_plain_text_stream_untouched():
+    raw = b'data: {"id":"x","model":"m","choices":[{"delta":{"content":"ok"}}]}\n\ndata: [DONE]\n\n'
+    output = MODULE.normalize_stream(raw)
+    assert b'"content":"ok"' in output
+    assert b'"finish_reason":"stop"' in output

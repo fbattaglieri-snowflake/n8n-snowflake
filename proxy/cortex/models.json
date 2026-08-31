@@ -1,4 +1,14 @@
 {
+  "_comment": [
+    "Model catalog served by GET /v1/models. Two rules learned the hard way:",
+    "never list a model you have not actually called, because an unknown name returns",
+    "HTTP 400 unknown model, which clients often report as a context-length error;",
+    "and remember that the n8n AI Agent node requires tool calling, so a model in",
+    "tools_unsupported cannot back an agent.",
+    "Availability differs per account and region: verify against your own account.",
+    "The service mounts this file from a stage and re-reads it, so adding a model is a",
+    "file upload with no image rebuild."
+  ],
   "models": [
     "claude-sonnet-4-5",
     "openai-gpt-5.4",
@@ -7,4 +17,3 @@
   "tools_require_reasoning_effort_none": [],
   "tools_unsupported": []
 }
-

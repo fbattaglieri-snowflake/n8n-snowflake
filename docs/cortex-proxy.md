@@ -21,6 +21,11 @@ The proxy reads `/snowflake/session/token` for every upstream request and sends 
 - A missing `finish_reason` is inferred, so clients that branch on `tool_calls` work.
 - Models that reject `tools` unless `reasoning_effort` is `none` get it set for them,
   with an adaptive retry for models not yet in the catalog.
+- **Streamed tool calls are renumbered.** On Claude-family models Cortex marks every
+  parallel tool call with `index: 0`. A client reassembles fragments by index, so it merges
+  the calls into one, executes a single tool and leaves an orphan `toolUse` in the history,
+  which makes the next request fail. The proxy counts distinct call ids and rewrites the
+  index. It is idempotent: on models that already number correctly nothing is rewritten.
 - **Parallel tool calls are collapsed.** Cortex places each `tool` message in its own
   turn, so an assistant turn with N tool calls arrives with one `toolResult` for N
   `toolUse` blocks and is rejected with a non-retryable `HTTP 400 Each 'toolUse' block

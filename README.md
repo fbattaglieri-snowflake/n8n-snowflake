@@ -34,6 +34,7 @@ OIDC workload identity                dedicated deployment roles
 - Snowflake Secrets for the Postgres password and n8n encryption key.
 - Internal proxy for `/api/v2/statements` and Cortex OpenAI compatibility.
 - AI Agents whose LLM is served by Snowflake Cortex through that proxy, with no external model provider in the path.
+- Documented patterns for reaching every Snowflake capability from a workflow: standard tables, Snowflake Postgres, Cortex Analyst, Cortex Search, Cortex Agents and model inference.
 - Local proxy for managing the n8n REST API through Snowflake ingress.
 - Secretless GitHub-to-Snowflake authentication with workload identity federation.
 - Maintainer-approved bootstrap and deployment environments.
@@ -70,6 +71,7 @@ OIDC workload identity                dedicated deployment roles
 ## Documentation
 
 - [Architecture](docs/architecture.md)
+- [Building workflows against every Snowflake capability](docs/building-workflows.md) — model inference, agents, Cortex Analyst, Cortex Search, standard tables and Snowflake Postgres, with the pitfalls of each
 - [Configuration](docs/configuration.md)
 - [Security](docs/security.md)
 - [Operations](docs/operations.md)
