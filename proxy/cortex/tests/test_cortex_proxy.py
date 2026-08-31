@@ -59,3 +59,69 @@ def test_injects_stream_terminal_reason():
 def test_model_list():
     output = json.loads(MODULE.model_response(config()))
     assert output["data"][0]["id"] == "model-a"
+
+
+def parallel_turn():
+    return {
+        "model": "model-a",
+        "tools": [{"type": "function"}],
+        "messages": [
+            {"role": "user", "content": "call both"},
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {"id": "a", "function": {"name": "alpha", "arguments": "{}"}},
+                    {"id": "b", "function": {"name": "beta", "arguments": "{}"}},
+                ],
+            },
+            {"role": "tool", "tool_call_id": "a", "content": "alpha=11"},
+            {"role": "tool", "tool_call_id": "b", "content": "beta=22"},
+        ],
+    }
+
+
+def test_collapses_parallel_tool_calls_and_keeps_every_result():
+    output = MODULE.rewrite_chat_request(parallel_turn(), config())
+    assistant = output["messages"][1]
+    assert len(assistant["tool_calls"]) == 1
+    assert assistant["tool_calls"][0]["id"] == "a"
+    tool_messages = [m for m in output["messages"] if m["role"] == "tool"]
+    assert len(tool_messages) == 1
+    assert tool_messages[0]["tool_call_id"] == "a"
+    assert "alpha=11" in tool_messages[0]["content"]
+    assert "beta=22" in tool_messages[0]["content"]
+    assert "[beta]" in tool_messages[0]["content"]
+
+
+def test_collapse_does_not_mutate_the_caller_document():
+    original = parallel_turn()
+    MODULE.rewrite_chat_request(original, config())
+    assert len(original["messages"][1]["tool_calls"]) == 2
+
+
+def test_single_tool_call_is_untouched():
+    body = parallel_turn()
+    body["messages"][1]["tool_calls"] = [body["messages"][1]["tool_calls"][0]]
+    body["messages"] = body["messages"][:3]
+    output = MODULE.rewrite_chat_request(body, config())
+    assert len(output["messages"]) == 3
+    assert output["messages"][2]["content"] == "alpha=11"
+
+
+def test_orphan_results_are_reattached_to_the_kept_call():
+    body = parallel_turn()
+    body["messages"] = [body["messages"][0], body["messages"][1], body["messages"][3]]
+    output = MODULE.rewrite_chat_request(body, config())
+    tool_messages = [m for m in output["messages"] if m["role"] == "tool"]
+    assert len(tool_messages) == 1
+    assert tool_messages[0]["tool_call_id"] == "a"
+    assert "beta=22" in tool_messages[0]["content"]
+
+
+def test_flattens_block_style_tool_content():
+    body = parallel_turn()
+    body["messages"][3]["content"] = [{"type": "text", "text": "beta=22"}]
+    output = MODULE.rewrite_chat_request(body, config())
+    tool_messages = [m for m in output["messages"] if m["role"] == "tool"]
+    assert "beta=22" in tool_messages[0]["content"]
