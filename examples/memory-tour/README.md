@@ -7,6 +7,9 @@ served by Snowflake Cortex.
 Nothing in this example calls an external model provider. The prompts, the data and
 the answers stay inside Snowflake.
 
+For the patterns behind it, generalised and explained one capability at a time, read
+[`docs/building-workflows.md`](../../docs/building-workflows.md).
+
 ## What it demonstrates
 
 | Memory | Write | Read |

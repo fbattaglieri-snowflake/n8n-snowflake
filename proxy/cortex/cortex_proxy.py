@@ -199,10 +199,45 @@ def terminal_stream_chunk(last_data: dict[str, Any] | None) -> bytes:
     return f"data: {json.dumps(chunk, separators=(',', ':'))}\n\n".encode()
 
 
+def reindex_tool_calls(document: dict[str, Any], state: dict[str, Any]) -> bool:
+    """Renumber streamed tool-call fragments so each call keeps its own index.
+
+    On Claude-family models Cortex marks every parallel tool call with ``index: 0``.
+    A client reassembles fragments by index, so it merges the calls into one,
+    executes a single tool and returns one ``toolResult`` for two ``toolUse``
+    blocks; the next request is then rejected with
+    ``HTTP 400 Each 'toolUse' block must be accompanied with a matching
+    'toolResult' block``.
+
+    A fragment carrying a non-empty ``id`` opens a new call, later fragments only
+    carry a slice of ``arguments``. Counting distinct ids and using the counter as
+    the index restores the pairing. Comparing against the last id makes this
+    idempotent: on models that already number correctly the recomputed indexes
+    match the originals and nothing is rewritten.
+    """
+    changed = False
+    for choice in document.get("choices") or []:
+        if not isinstance(choice, dict):
+            continue
+        for fragment in (choice.get("delta") or {}).get("tool_calls") or []:
+            if not isinstance(fragment, dict):
+                continue
+            call_id = fragment.get("id") or ""
+            if call_id and call_id != state.get("last_id"):
+                state["count"] = state.get("count", 0) + 1
+                state["last_id"] = call_id
+            index = max(state.get("count", 1) - 1, 0)
+            if fragment.get("index") != index:
+                fragment["index"] = index
+                changed = True
+    return changed
+
+
 def normalize_stream(payload: bytes) -> bytes:
     output: list[bytes] = []
     last_data: dict[str, Any] | None = None
     has_terminal_reason = False
+    tool_state: dict[str, Any] = {}
 
     for raw_line in payload.splitlines(keepends=True):
         stripped = raw_line.strip()
@@ -218,6 +253,9 @@ def normalize_stream(payload: bytes) -> bytes:
                 has_terminal_reason = has_terminal_reason or any(
                     choice.get("finish_reason") for choice in choices
                 )
+                if reindex_tool_calls(last_data, tool_state):
+                    payload_line = json.dumps(last_data, separators=(",", ":"))
+                    raw_line = f"data: {payload_line}\n\n".encode()
             except (json.JSONDecodeError, AttributeError):
                 pass
         output.append(raw_line)
