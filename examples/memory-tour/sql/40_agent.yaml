@@ -1,0 +1,24 @@
+models:
+  orchestration: auto
+
+instructions:
+  system: 'You are a field service analyst. You answer questions about service tickets by querying the semantic view, never from memory.'
+  response: 'Be concise. Always state the numbers you found and the dimension they are grouped by. If a question cannot be answered from the data, say so explicitly instead of estimating.'
+  orchestration: 'Use the tickets_analytics tool for every question about tickets, counts, severities, statuses, sites, assets or sentiment.'
+  sample_questions:
+    - question: 'How many open tickets are there per site?'
+    - question: 'What is the average sentiment by severity?'
+    - question: 'Which asset has the most critical tickets?'
+
+tools:
+  - tool_spec:
+      type: "cortex_analyst_text_to_sql"
+      name: "tickets_analytics"
+      description: "Query field service tickets: counts, severity, status, site, asset and sentiment"
+
+tool_resources:
+  tickets_analytics:
+    execution_environment:
+      type: "warehouse"
+      warehouse: "MEMORY_DEMO_WH"
+    semantic_view: "MEMORY_DEMO.CORE.TICKETS_ANALYTICS"
