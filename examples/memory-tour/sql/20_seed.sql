@@ -1,0 +1,63 @@
+-- Deterministic seed for MEMORY_DEMO. Values are fixed so that Cortex Analyst
+-- answers can be checked against a known ground truth.
+
+INSERT INTO MEMORY_DEMO.CORE.SERVICE_TICKETS
+    (TICKET_ID, RUN_ID, SITE, ASSET, SEVERITY, STATUS, SENTIMENT_SCORE, NOTE, SOURCE, CREATED_AT)
+VALUES
+    ('T-0001', 'seed', 'MILANO_PLANT',  'PRESS_A12',    'high',     'closed',      -0.60, 'Hydraulic pressure drop during night shift, seal replaced.', 'seed', '2026-08-01 07:15:00'),
+    ('T-0002', 'seed', 'MILANO_PLANT',  'CONVEYOR_B3',  'medium',   'closed',      -0.20, 'Belt misalignment, retensioned.', 'seed', '2026-08-02 09:40:00'),
+    ('T-0003', 'seed', 'MILANO_PLANT',  'CHILLER_C7',   'critical', 'open',        -0.90, 'Coolant leak, line stopped, waiting for spare part.', 'seed', '2026-08-03 06:05:00'),
+    ('T-0004', 'seed', 'MILANO_PLANT',  'ROBOT_ARM_D2', 'low',      'closed',       0.30, 'Routine calibration, within tolerance.', 'seed', '2026-08-04 11:20:00'),
+    ('T-0005', 'seed', 'MILANO_PLANT',  'PACKER_E5',    'medium',   'in_progress', -0.30, 'Label applicator jams intermittently.', 'seed', '2026-08-05 14:00:00'),
+    ('T-0006', 'seed', 'MILANO_PLANT',  'PRESS_A12',    'low',      'closed',       0.40, 'Lubrication cycle completed, no findings.', 'seed', '2026-08-06 08:10:00'),
+    ('T-0007', 'seed', 'MILANO_PLANT',  'CHILLER_C7',   'high',     'in_progress', -0.70, 'Temperature drift above threshold after restart.', 'seed', '2026-08-07 16:35:00'),
+    ('T-0008', 'seed', 'TORINO_PLANT',  'PRESS_A12',    'medium',   'closed',      -0.10, 'Noise on downstroke, bushing replaced.', 'seed', '2026-08-01 10:05:00'),
+    ('T-0009', 'seed', 'TORINO_PLANT',  'CONVEYOR_B3',  'critical', 'open',        -0.95, 'Drive motor burnt, production line halted.', 'seed', '2026-08-02 05:50:00'),
+    ('T-0010', 'seed', 'TORINO_PLANT',  'ROBOT_ARM_D2', 'low',      'closed',       0.50, 'Firmware updated, cycle time improved.', 'seed', '2026-08-03 13:25:00'),
+    ('T-0011', 'seed', 'TORINO_PLANT',  'PACKER_E5',    'high',     'in_progress', -0.65, 'Carton feeder repeatedly out of sync.', 'seed', '2026-08-04 15:45:00'),
+    ('T-0012', 'seed', 'TORINO_PLANT',  'CHILLER_C7',   'medium',   'closed',      -0.25, 'Filter clogged, replaced during planned stop.', 'seed', '2026-08-05 07:30:00'),
+    ('T-0013', 'seed', 'TORINO_PLANT',  'PRESS_A12',    'low',      'closed',       0.20, 'Operator training request, closed with checklist.', 'seed', '2026-08-06 12:15:00'),
+    ('T-0014', 'seed', 'TORINO_PLANT',  'CONVEYOR_B3',  'medium',   'open',        -0.40, 'Roller bearing noise increasing week over week.', 'seed', '2026-08-07 09:55:00'),
+    ('T-0015', 'seed', 'BOLOGNA_DEPOT', 'PACKER_E5',    'low',      'closed',       0.60, 'Preventive check, all parameters nominal.', 'seed', '2026-08-01 08:45:00'),
+    ('T-0016', 'seed', 'BOLOGNA_DEPOT', 'ROBOT_ARM_D2', 'high',     'open',        -0.75, 'Gripper drops packages above 12 kg.', 'seed', '2026-08-02 14:10:00'),
+    ('T-0017', 'seed', 'BOLOGNA_DEPOT', 'CHILLER_C7',   'low',      'closed',       0.10, 'Condensate drain cleaned.', 'seed', '2026-08-03 10:30:00'),
+    ('T-0018', 'seed', 'BOLOGNA_DEPOT', 'PRESS_A12',    'medium',   'in_progress', -0.35, 'Cycle time degraded by eight percent.', 'seed', '2026-08-04 17:05:00'),
+    ('T-0019', 'seed', 'BOLOGNA_DEPOT', 'CONVEYOR_B3',  'low',      'closed',       0.45, 'Emergency stop test passed.', 'seed', '2026-08-05 11:50:00'),
+    ('T-0020', 'seed', 'BOLOGNA_DEPOT', 'PACKER_E5',    'critical', 'open',        -0.85, 'Sealing bar overheating, fire risk flagged.', 'seed', '2026-08-06 06:20:00'),
+    ('T-0021', 'seed', 'NAPOLI_DEPOT',  'CHILLER_C7',   'medium',   'closed',      -0.15, 'Refrigerant topped up after slow loss.', 'seed', '2026-08-01 15:35:00'),
+    ('T-0022', 'seed', 'NAPOLI_DEPOT',  'PRESS_A12',    'high',     'open',        -0.70, 'Safety light curtain intermittently unresponsive.', 'seed', '2026-08-02 08:25:00'),
+    ('T-0023', 'seed', 'NAPOLI_DEPOT',  'ROBOT_ARM_D2', 'low',      'closed',       0.35, 'Cable chain inspection, no wear.', 'seed', '2026-08-03 12:40:00'),
+    ('T-0024', 'seed', 'NAPOLI_DEPOT',  'CONVEYOR_B3',  'medium',   'in_progress', -0.30, 'Speed sensor reading unstable at low speed.', 'seed', '2026-08-04 09:15:00'),
+    ('T-0025', 'seed', 'NAPOLI_DEPOT',  'PACKER_E5',    'low',      'closed',       0.55, 'Spare parts restocked, no downtime.', 'seed', '2026-08-05 16:00:00'),
+    ('T-0026', 'seed', 'NAPOLI_DEPOT',  'CHILLER_C7',   'high',     'open',        -0.80, 'Compressor short cycling under full load.', 'seed', '2026-08-06 07:45:00'),
+    ('T-0027', 'seed', 'NAPOLI_DEPOT',  'PRESS_A12',    'low',      'closed',       0.25, 'Guard panel realigned.', 'seed', '2026-08-07 13:05:00'),
+    ('T-0028', 'seed', 'MILANO_PLANT',  'CONVEYOR_B3',  'high',     'open',        -0.65, 'Product jam at transfer point twice per shift.', 'seed', '2026-08-08 10:20:00'),
+    ('T-0029', 'seed', 'TORINO_PLANT',  'ROBOT_ARM_D2', 'medium',   'in_progress', -0.20, 'Vision system misreads reflective labels.', 'seed', '2026-08-08 11:40:00'),
+    ('T-0030', 'seed', 'BOLOGNA_DEPOT', 'CHILLER_C7',   'critical', 'open',        -0.90, 'Cold room above target for six hours, stock at risk.', 'seed', '2026-08-08 05:30:00');
+
+INSERT INTO MEMORY_DEMO.CORE.SERVICE_DOCS (DOC_ID, RUN_ID, TITLE, CHUNK, SOURCE, CREATED_AT)
+VALUES
+    ('D-001', 'seed', 'Chiller coolant leak procedure',
+     'When a chiller reports a coolant leak, isolate the unit, depressurise the circuit and inspect the shaft seal first: it accounts for most leaks on the C7 family. Replace the seal kit, refill with the approved refrigerant and run a thirty minute leak test before returning the unit to production. Escalate to the OEM if pressure drops more than 0.2 bar during the test.',
+     'maintenance_manual', '2026-07-10 09:00:00'),
+    ('D-002', 'seed', 'Conveyor belt misalignment',
+     'Belt misalignment on the B3 conveyor is corrected by retensioning the belt to 320 newton and squaring the tail pulley. Check for material build-up on the return rollers before adjusting tension: build-up reproduces the fault within a shift. Record the tension value in the maintenance log.',
+     'maintenance_manual', '2026-07-10 09:05:00'),
+    ('D-003', 'seed', 'Press hydraulic pressure loss',
+     'A pressure drop on the A12 press is usually the rod seal or the relief valve. Measure static pressure with the pump off. If pressure holds, the pump is fine and the relief valve is the suspect. Replace the seal kit every 4000 operating hours as preventive maintenance.',
+     'maintenance_manual', '2026-07-10 09:10:00'),
+    ('D-004', 'seed', 'Robot gripper payload limits',
+     'The D2 robot arm gripper is rated for 10 kg continuous and 12 kg peak. Dropped packages above 12 kg are expected behaviour, not a fault: reduce the payload or fit the high force gripper. Vacuum loss below 0.6 bar triggers the drop protection.',
+     'maintenance_manual', '2026-07-10 09:15:00'),
+    ('D-005', 'seed', 'Packer sealing bar overheating',
+     'Overheating of the E5 sealing bar is a safety stop condition. Cut power at the local isolator, let the bar cool, then check the thermocouple and the solid state relay: a welded relay keeps the heater energised and is the most frequent root cause. Do not restart production until the relay has been replaced and the temperature curve verified.',
+     'safety_bulletin', '2026-07-11 08:00:00'),
+    ('D-006', 'seed', 'Safety light curtain unresponsive',
+     'An intermittently unresponsive light curtain must be treated as a line stop. Verify alignment, clean the lenses and check the muting circuit wiring. Any curtain fault older than 24 hours has to be reported to the safety officer under the plant safety procedure.',
+     'safety_bulletin', '2026-07-11 08:10:00'),
+    ('D-007', 'seed', 'Cold room temperature excursion',
+     'A cold room above target temperature for more than two hours puts stock at risk and starts the quality hold procedure. Log the excursion, move perishable stock to the backup room and have quality assurance release or scrap the affected batches.',
+     'quality_procedure', '2026-07-12 10:00:00'),
+    ('D-008', 'seed', 'Preventive maintenance intervals',
+     'Preventive maintenance intervals: press A12 every 4000 hours, conveyor B3 every 2000 hours, chiller C7 every 1500 hours, robot arm D2 every 3000 hours, packer E5 every 2500 hours. Intervals are halved for assets with two or more critical tickets in the last quarter.',
+     'maintenance_manual', '2026-07-12 10:05:00');

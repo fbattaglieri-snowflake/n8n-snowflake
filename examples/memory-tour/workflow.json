@@ -1,0 +1,774 @@
+{
+  "name": "Snowflake Memory Tour",
+  "nodes": [
+    {
+      "id": "manual-trigger",
+      "name": "When clicking Execute workflow",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -460,
+        300
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "webhook-trigger",
+      "name": "Webhook start",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -460,
+        460
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "memory-tour",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "notes": "Second entry point: lets the tour run from curl or from another system, returning the report as the HTTP response."
+    },
+    {
+      "id": "init-run",
+      "name": "Init run",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -240,
+        300
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "run_id",
+              "type": "string",
+              "value": "={{ 'n8n-' + $execution.id }}"
+            },
+            {
+              "id": "a2",
+              "name": "started_at",
+              "type": "string",
+              "value": "={{ $now.toISO() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "notes": "run_id ties together every row written across the three memories"
+    },
+    {
+      "id": "write-ticket",
+      "name": "Write ticket",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -20,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://CORTEX_PROXY_DNS_NAME:8080/api/v2/statements",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({  statement: \"INSERT INTO MEMORY_DEMO.CORE.SERVICE_TICKETS (TICKET_ID, RUN_ID, SITE, ASSET, SEVERITY, STATUS, SENTIMENT_SCORE, NOTE, SOURCE) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?\",  timeout: 120, database: 'MEMORY_DEMO', schema: 'CORE',  warehouse: 'MEMORY_DEMO_WH', role: 'ACCOUNTADMIN',  bindings: {    '1': { type: 'TEXT', value: 'T-' + $json.run_id },    '2': { type: 'TEXT', value: $json.run_id },    '3': { type: 'TEXT', value: 'MILANO_PLANT' },    '4': { type: 'TEXT', value: 'PACKER_E5' },    '5': { type: 'TEXT', value: 'medium' },    '6': { type: 'TEXT', value: 'open' },    '7': { type: 'REAL', value: '-0.4' },    '8': { type: 'TEXT', value: \"Sealing bar tripped twice in one shift, operator's note filed by n8n\" },    '9': { type: 'TEXT', value: 'n8n' }  } }) }}",
+        "options": {
+          "timeout": 180000
+        }
+      },
+      "notes": "INSERT with parameter binding. Concatenation would break on apostrophes (HTTP 422)."
+    },
+    {
+      "id": "update-ticket",
+      "name": "Update ticket",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        200,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://CORTEX_PROXY_DNS_NAME:8080/api/v2/statements",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({  statement: \"UPDATE MEMORY_DEMO.CORE.SERVICE_TICKETS SET SEVERITY = ?, STATUS = ?, NOTE = ?, UPDATED_AT = CURRENT_TIMESTAMP() WHERE RUN_ID = ?\",  timeout: 120, database: 'MEMORY_DEMO', schema: 'CORE',  warehouse: 'MEMORY_DEMO_WH', role: 'ACCOUNTADMIN',  bindings: {    '1': { type: 'TEXT', value: 'high' },    '2': { type: 'TEXT', value: 'in_progress' },    '3': { type: 'TEXT', value: 'Escalated to high after a second trip in the same shift' },    '4': { type: 'TEXT', value: $('Init run').first().json.run_id }  } }) }}",
+        "options": {
+          "timeout": 180000
+        }
+      },
+      "notes": "Same row, escalated severity."
+    },
+    {
+      "id": "read-via-cortex-analyst",
+      "name": "Read via Cortex Analyst",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        420,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://CORTEX_PROXY_DNS_NAME:8080/api/v2/statements",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({  statement: 'SELECT SNOWFLAKE.CORTEX.DATA_AGENT_RUN(?, ?) AS RESPONSE',  timeout: 300, database: 'MEMORY_DEMO', schema: 'CORE',  warehouse: 'MEMORY_DEMO_WH', role: 'ACCOUNTADMIN',  bindings: {    '1': { type: 'TEXT', value: 'MEMORY_DEMO.CORE.MEMORY_DEMO_AGENT' },    '2': { type: 'TEXT', value: JSON.stringify({ messages: [ { role: 'user',      content: [ { type: 'text', text: \"Answer both questions in order. First: how many tickets have RUN_ID equal to {run_id}, and what severity and status do they have? Second: how many open tickets are there per site across the whole table?\".replace('{run_id}', $('Init run').first().json.run_id) } ] } ] }) }  } }) }}",
+        "options": {
+          "timeout": 180000
+        }
+      },
+      "notes": "DATA_AGENT_RUN: the Analyst REST API is not reachable through the proxy."
+    },
+    {
+      "id": "parse-analyst",
+      "name": "Parse Analyst answer",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// Cortex Analyst answers arrive nested twice: the SQL API wraps the row, and\n// DATA_AGENT_RUN returns a JSON document whose content array holds the text.\nconst rows = $input.first().json.data || [];\nconst raw = rows.length ? rows[0][0] : null;\nlet answer = '';\nlet parsed = null;\nif (raw) {\n  try {\n    parsed = JSON.parse(raw);\n    const texts = (parsed.content || [])\n      .filter((block) => block.type === 'text' && block.text)\n      .map((block) => block.text.trim())\n      .filter((text) => text.length > 0);\n    answer = texts.length ? texts[texts.length - 1] : '';\n  } catch (error) {\n    answer = 'could not parse the agent response: ' + error.message;\n  }\n}\nreturn [{\n  json: {\n    run_id: $('Init run').first().json.run_id,\n    analyst_answer: answer,\n    analyst_ok: answer.length > 0,\n  },\n}];\n"
+      }
+    },
+    {
+      "id": "write-document-chunk",
+      "name": "Write document chunk",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        860,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://CORTEX_PROXY_DNS_NAME:8080/api/v2/statements",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({  statement: \"INSERT INTO MEMORY_DEMO.CORE.SERVICE_DOCS (DOC_ID, RUN_ID, TITLE, CHUNK, SOURCE) SELECT ?, ?, ?, ?, ?\",  timeout: 120, database: 'MEMORY_DEMO', schema: 'CORE',  warehouse: 'MEMORY_DEMO_WH', role: 'ACCOUNTADMIN',  bindings: {    '1': { type: 'TEXT', value: 'D-' + $('Init run').first().json.run_id },    '2': { type: 'TEXT', value: $('Init run').first().json.run_id },    '3': { type: 'TEXT', value: 'Packer E5 repeated trip runbook' },    '4': { type: 'TEXT', value: 'Runbook entry written by n8n during run ' + $('Init run').first().json.run_id + '. When the E5 packer sealing bar trips twice within the same shift, do not reset it a third time: isolate the machine, replace the solid state relay and verify the temperature curve before restarting production. A third reset is the pattern that precedes a bar fire.' },    '5': { type: 'TEXT', value: 'n8n_runbook' }  } }) }}",
+        "options": {
+          "timeout": 180000
+        }
+      },
+      "notes": "New runbook chunk for this run."
+    },
+    {
+      "id": "wait-search-lag",
+      "name": "Wait for search lag",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1080,
+        300
+      ],
+      "parameters": {
+        "amount": 70,
+        "unit": "seconds"
+      },
+      "notes": "DOC_SEARCH has TARGET_LAG 1 minute: the new chunk is not searchable before that."
+    },
+    {
+      "id": "read-via-cortex-search",
+      "name": "Read via Cortex Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1300,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://CORTEX_PROXY_DNS_NAME:8080/api/v2/statements",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({  statement: \"SELECT SNOWFLAKE.CORTEX.SEARCH_PREVIEW(?, ?) AS RESULTS\",  timeout: 180, database: 'MEMORY_DEMO', schema: 'CORE',  warehouse: 'MEMORY_DEMO_WH', role: 'ACCOUNTADMIN',  bindings: {    '1': { type: 'TEXT', value: 'MEMORY_DEMO.CORE.DOC_SEARCH' },    '2': { type: 'TEXT', value: JSON.stringify({      query: 'what should I do when the E5 packer sealing bar trips twice in one shift',      columns: ['DOC_ID', 'RUN_ID', 'TITLE', 'CHUNK', 'SOURCE'],      filter: { '@eq': { RUN_ID: $('Init run').first().json.run_id } },      limit: 3 }) }  } }) }}",
+        "options": {
+          "timeout": 180000
+        }
+      },
+      "notes": "SEARCH_PREVIEW is the SQL entry point to Cortex Search."
+    },
+    {
+      "id": "parse-search",
+      "name": "Parse search hit",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1520,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// SEARCH_PREVIEW returns a JSON string in a single cell.\nconst rows = $input.first().json.data || [];\nconst raw = rows.length ? rows[0][0] : '[]';\nconst runId = $('Init run').first().json.run_id;\nlet hits = [];\ntry {\n  const parsed = JSON.parse(raw);\n  hits = Array.isArray(parsed) ? parsed : (parsed.results || []);\n} catch (error) {\n  hits = [];\n}\nconst top = hits.length ? hits[0] : null;\nconst ownIndex = hits.findIndex((hit) => hit.RUN_ID === runId);\nreturn [{\n  json: {\n    run_id: runId,\n    search_hits: hits.length,\n    search_top_title: top ? top.TITLE : null,\n    search_top_is_from_this_run: top ? top.RUN_ID === runId : false,\n    search_own_chunk_rank: ownIndex >= 0 ? ownIndex + 1 : null,\n    search_top_chunk: top ? String(top.CHUNK).slice(0, 400) : null,\n    analyst_answer: $('Parse Analyst answer').first().json.analyst_answer,\n    analyst_ok: $('Parse Analyst answer').first().json.analyst_ok,\n  },\n}];\n"
+      }
+    },
+    {
+      "id": "prepare-postgres-table",
+      "name": "Prepare Postgres table",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1740,
+        300
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE TABLE IF NOT EXISTS demo_events (\n  event_id   BIGSERIAL PRIMARY KEY,\n  run_id     TEXT NOT NULL,\n  site       TEXT,\n  status     TEXT,\n  note       TEXT,\n  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),\n  updated_at TIMESTAMPTZ\n);",
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_YOUR_POSTGRES_CREDENTIAL_ID",
+          "name": "Memory Demo Postgres"
+        }
+      },
+      "notes": "Idempotent DDL: the demo owns its schema, no manual setup needed."
+    },
+    {
+      "id": "write-postgres-event",
+      "name": "Write Postgres event",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1960,
+        300
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=INSERT INTO demo_events (run_id, site, status, note)\nVALUES ('{{ $('Init run').first().json.run_id }}', 'MILANO_PLANT', 'received',\n        'Ticket handed over to the maintenance crew')\nRETURNING event_id, run_id, status;",
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_YOUR_POSTGRES_CREDENTIAL_ID",
+          "name": "Memory Demo Postgres"
+        }
+      },
+      "notes": ""
+    },
+    {
+      "id": "update-postgres-event",
+      "name": "Update Postgres event",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2180,
+        300
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=UPDATE demo_events\nSET status = 'acknowledged', updated_at = NOW()\nWHERE run_id = '{{ $('Init run').first().json.run_id }}'\nRETURNING event_id, status, updated_at;",
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_YOUR_POSTGRES_CREDENTIAL_ID",
+          "name": "Memory Demo Postgres"
+        }
+      },
+      "notes": ""
+    },
+    {
+      "id": "read-postgres-directly",
+      "name": "Read Postgres directly",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2400,
+        300
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=SELECT event_id, run_id, site, status, note, created_at, updated_at\nFROM demo_events\nWHERE run_id = '{{ $('Init run').first().json.run_id }}'\nORDER BY event_id;",
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_YOUR_POSTGRES_CREDENTIAL_ID",
+          "name": "Memory Demo Postgres"
+        }
+      },
+      "notes": "Postgres is read directly with SQL: no Cortex layer in between."
+    },
+    {
+      "id": "ai-agent",
+      "name": "AI Agent through Cortex",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        2620,
+        300
+      ],
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are reporting on Snowflake memories for run {{ $('Init run').first().json.run_id }}.\nUse your tools, never your own knowledge, and do all of the following:\n1. Call ticket_stats and report how many open tickets each site has.\n2. Call search_procedures asking what to do when the E5 packer sealing bar trips twice in one shift, and summarise the procedure in one sentence.\n3. Call recent_events and report the status of the most recent Postgres event.\nState which tool produced each answer. Be concise.",
+        "options": {
+          "systemMessage": "You are a reporting agent for a Snowflake demo. You have three tools, each backed by a different Snowflake memory: a standard table reached over the SQL API, a document corpus reached with Cortex Search, and a Snowflake Postgres database. Answer only with data returned by the tools, never from your own knowledge, and always say which tool produced each figure. If a tool fails, report the failure instead of guessing."
+        }
+      },
+      "notes": "Reasons across all three memories. The LLM is served by Snowflake Cortex."
+    },
+    {
+      "id": "snowflake-llms",
+      "name": "Snowflake LLMs",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        2520,
+        520
+      ],
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "id",
+          "value": "claude-sonnet-5"
+        },
+        "responsesApiEnabled": false,
+        "options": {}
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "REPLACE_WITH_YOUR_OPENAI_CREDENTIAL_ID",
+          "name": "Snowflake LLMs"
+        }
+      },
+      "notes": "OpenAI-compatible credential pointed at the Cortex proxy. Responses API is off: the proxy implements /v1/chat/completions only."
+    },
+    {
+      "id": "simple-memory",
+      "name": "Simple Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        2680,
+        520
+      ],
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Init run').first().json.run_id }}",
+        "contextWindowLength": 10
+      },
+      "notes": "Conversation memory keyed on the run id."
+    },
+    {
+      "id": "tool-ticket-stats",
+      "name": "ticket_stats",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.5,
+      "position": [
+        2840,
+        520
+      ],
+      "parameters": {
+        "toolDescription": "Open service tickets grouped by site, from the Snowflake standard table. Takes no input.",
+        "method": "POST",
+        "url": "http://CORTEX_PROXY_DNS_NAME:8080/api/v2/statements",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"statement\": \"SELECT SITE, COUNT(*) AS OPEN_TICKETS FROM MEMORY_DEMO.CORE.SERVICE_TICKETS WHERE STATUS = 'open' GROUP BY SITE ORDER BY SITE\", \"timeout\": 120, \"database\": \"MEMORY_DEMO\", \"schema\": \"CORE\", \"warehouse\": \"MEMORY_DEMO_WH\", \"role\": \"ACCOUNTADMIN\"}",
+        "options": {}
+      }
+    },
+    {
+      "id": "tool-search-procedures",
+      "name": "search_procedures",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.5,
+      "position": [
+        3000,
+        520
+      ],
+      "parameters": {
+        "toolDescription": "Search the maintenance and safety procedure corpus with Cortex Search. Input: a natural language question.",
+        "method": "POST",
+        "url": "http://CORTEX_PROXY_DNS_NAME:8080/api/v2/statements",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({  statement: \"SELECT SNOWFLAKE.CORTEX.SEARCH_PREVIEW(?, ?) AS RESULTS\",  timeout: 180, database: 'MEMORY_DEMO', schema: 'CORE',  warehouse: 'MEMORY_DEMO_WH', role: 'ACCOUNTADMIN',  bindings: {    '1': { type: 'TEXT', value: 'MEMORY_DEMO.CORE.DOC_SEARCH' },    '2': { type: 'TEXT', value: JSON.stringify({      query: $fromAI('searchQuery', 'The question to search the procedure corpus with', 'string'),      columns: ['TITLE', 'CHUNK', 'SOURCE'],      limit: 2 }) }  } }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "tool-recent-events",
+      "name": "recent_events",
+      "type": "n8n-nodes-base.postgresTool",
+      "typeVersion": 2.6,
+      "position": [
+        3160,
+        520
+      ],
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "The most recent events recorded in Snowflake Postgres. Takes no input.",
+        "operation": "executeQuery",
+        "query": "SELECT event_id, run_id, site, status, created_at, updated_at FROM demo_events ORDER BY event_id DESC LIMIT 5;",
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_YOUR_POSTGRES_CREDENTIAL_ID",
+          "name": "Memory Demo Postgres"
+        }
+      }
+    },
+    {
+      "id": "compose-report",
+      "name": "Compose report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2840,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// One readable summary of what was written and what was read back.\nconst init = $('Init run').first().json;\nconst search = $('Parse search hit').first().json;\nconst pgRows = $('Read Postgres directly').all().map((item) => item.json);\nconst agent = $input.first().json;\nconst agentText = agent.output || agent.text || JSON.stringify(agent).slice(0, 800);\n\nconst lines = [];\nlines.push('SNOWFLAKE MEMORY TOUR - run ' + init.run_id);\nlines.push('started ' + init.started_at);\nlines.push('');\nlines.push('1. STANDARD TABLE  MEMORY_DEMO.CORE.SERVICE_TICKETS');\nlines.push('   wrote   1 ticket with parameter binding, then updated severity and status');\nlines.push('   read    through Cortex Analyst in natural language');\nlines.push('   answer  ' + String(search.analyst_answer).replace(/\\n+/g, ' ').slice(0, 400));\nlines.push('');\nlines.push('2. DOCUMENT CORPUS  MEMORY_DEMO.CORE.SERVICE_DOCS + DOC_SEARCH');\nlines.push('   wrote   1 runbook chunk tagged with this run id');\nlines.push('   read    through Cortex Search, ' + search.search_hits + ' hits');\nlines.push('   top hit ' + search.search_top_title +\n  (search.search_top_is_from_this_run ? ' (written by this run)' : ' (pre-existing document)'));\nlines.push('   the search was filtered on this run id, so a hit proves the chunk was indexed');\nlines.push('');\nlines.push('3. SNOWFLAKE POSTGRES  demo_events on MEMORY_DEMO_PG');\nlines.push('   wrote   1 event, then updated its status');\nlines.push('   read    directly with SQL, ' + pgRows.length + ' row(s) for this run');\npgRows.forEach((row) => {\n  lines.push('   row     id=' + row.event_id + ' status=' + row.status + ' site=' + row.site);\n});\nlines.push('');\nlines.push('4. AI AGENT, LLM SERVED BY SNOWFLAKE CORTEX THROUGH THE PRIVATE PROXY');\nlines.push('   model   claude-sonnet-5 via cortex-proxy-service, no external provider');\nlines.push('   tools   ticket_stats (SQL API), search_procedures (Cortex Search), ' +\n  'recent_events (Postgres)');\nlines.push('   answer  ' + String(agentText).replace(/\\n+/g, ' ').slice(0, 1200));\n\nreturn [{ json: {\n  run_id: init.run_id,\n  report: lines.join('\\n'),\n  analyst_ok: search.analyst_ok,\n  search_ok: search.search_hits > 0,\n  postgres_rows: pgRows.length,\n  agent_answer: agentText,\n} }];\n"
+      }
+    },
+    {
+      "id": "error-trigger",
+      "name": "On error",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        -460,
+        760
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "log-failure",
+      "name": "Log failure",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -240,
+        760
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://CORTEX_PROXY_DNS_NAME:8080/api/v2/statements",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({  statement: \"INSERT INTO MEMORY_DEMO.CORE.DEMO_RUN_LOG (RUN_ID, WORKFLOW, NODE, MESSAGE) SELECT ?, ?, ?, ?\",  timeout: 120, database: 'MEMORY_DEMO', schema: 'CORE',  warehouse: 'MEMORY_DEMO_WH', role: 'ACCOUNTADMIN',  bindings: {    '1': { type: 'TEXT', value: 'n8n-' + ($json.execution ? $json.execution.id : 'unknown') },    '2': { type: 'TEXT', value: $json.workflow ? $json.workflow.name : 'unknown' },    '3': { type: 'TEXT', value: $json.execution && $json.execution.lastNodeExecuted ? $json.execution.lastNodeExecuted : 'unknown' },    '4': { type: 'TEXT', value: $json.execution && $json.execution.error ? String($json.execution.error.message).slice(0, 900) : 'no message' }  } }) }}",
+        "options": {
+          "timeout": 180000
+        }
+      },
+      "notes": "Failures land in MEMORY_DEMO.CORE.DEMO_RUN_LOG."
+    },
+    {
+      "id": "sticky-349345",
+      "name": "Sticky Note 345",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        60
+      ],
+      "parameters": {
+        "content": "## 1. Standard table\nWrite with INSERT and UPDATE through the SQL API, then read back in natural language with Cortex Analyst.\n\nEvery Snowflake call goes through the private Cortex proxy: SPCS forbids PAT bearer tokens from inside a container.",
+        "height": 200,
+        "width": 820,
+        "color": 4
+      }
+    },
+    {
+      "id": "sticky-64818199",
+      "name": "Sticky Note 199",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        840,
+        60
+      ],
+      "parameters": {
+        "content": "## 2. Document corpus\nAppend a runbook chunk, wait out the one minute search lag, then retrieve it with Cortex Search.\n\nThe wait is honest: TARGET_LAG is how fresh the index is, and the demo writes and reads inside the same execution.",
+        "height": 200,
+        "width": 660,
+        "color": 3
+      }
+    },
+    {
+      "id": "sticky-11936337",
+      "name": "Sticky Note 337",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1720,
+        60
+      ],
+      "parameters": {
+        "content": "## 3. Snowflake Postgres\nA dedicated BURST_S instance. The workflow creates its own table, writes, updates and reads it back with plain SQL: no Cortex layer in between.",
+        "height": 200,
+        "width": 880,
+        "color": 5
+      }
+    },
+    {
+      "id": "sticky-79599188",
+      "name": "Sticky Note 188",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2620,
+        60
+      ],
+      "parameters": {
+        "content": "## 4. One agent over all three memories\nThe LLM is served by Snowflake Cortex through the same private proxy, exposed as an OpenAI-compatible endpoint. No data and no prompt leaves Snowflake.\n\nThe proxy collapses parallel tool calls: without that, Cortex rejects any agent turn with more than one tool call.",
+        "height": 220,
+        "width": 640,
+        "color": 6
+      }
+    }
+  ],
+  "connections": {
+    "When clicking Execute workflow": {
+      "main": [
+        [
+          {
+            "node": "Init run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook start": {
+      "main": [
+        [
+          {
+            "node": "Init run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Init run": {
+      "main": [
+        [
+          {
+            "node": "Write ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write ticket": {
+      "main": [
+        [
+          {
+            "node": "Update ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update ticket": {
+      "main": [
+        [
+          {
+            "node": "Read via Cortex Analyst",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read via Cortex Analyst": {
+      "main": [
+        [
+          {
+            "node": "Parse Analyst answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Analyst answer": {
+      "main": [
+        [
+          {
+            "node": "Write document chunk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write document chunk": {
+      "main": [
+        [
+          {
+            "node": "Wait for search lag",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for search lag": {
+      "main": [
+        [
+          {
+            "node": "Read via Cortex Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read via Cortex Search": {
+      "main": [
+        [
+          {
+            "node": "Parse search hit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse search hit": {
+      "main": [
+        [
+          {
+            "node": "Prepare Postgres table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Postgres table": {
+      "main": [
+        [
+          {
+            "node": "Write Postgres event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Postgres event": {
+      "main": [
+        [
+          {
+            "node": "Update Postgres event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Postgres event": {
+      "main": [
+        [
+          {
+            "node": "Read Postgres directly",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Postgres directly": {
+      "main": [
+        [
+          {
+            "node": "AI Agent through Cortex",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent through Cortex": {
+      "main": [
+        [
+          {
+            "node": "Compose report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Snowflake LLMs": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent through Cortex",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent through Cortex",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ticket_stats": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent through Cortex",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "search_procedures": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent through Cortex",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "recent_events": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent through Cortex",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "On error": {
+      "main": [
+        [
+          {
+            "node": "Log failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
