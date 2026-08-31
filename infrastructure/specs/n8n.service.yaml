@@ -71,8 +71,12 @@ spec:
       source: block
       size: 50Gi
       blockConfig:
-        iops: 3000
-        throughput: 125
+        # iops and throughput are intentionally omitted: their supported ranges
+        # and defaults differ per cloud provider (for example, the minimum
+        # throughput for CPU instances is 125 MiB/s on AWS and Azure but
+        # 140 MiB/s on Google Cloud). Omitting them lets Snowflake apply the
+        # valid default for the region the service is deployed to. Set them
+        # explicitly only after checking the limits of your own cloud provider.
         encryption: SNOWFLAKE_FULL
         snapshotOnDelete: true
         snapshotDeleteAfter: 14d
