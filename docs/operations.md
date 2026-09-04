@@ -27,5 +27,6 @@ Starting the compute pool before Postgres can cause n8n to crash and restart rep
 
 ## Backup
 
-Create a block-volume snapshot before high-risk changes. Use Snowflake Postgres point-in-time recovery or a fork for database recovery testing. Backup and recovery actions are deliberately manual because they are billable and environment-specific.
+Create a block-volume snapshot before high-risk changes. Use Snowflake Postgres point-in-time recovery or a fork for database recovery testing.
 
+An optional **Backup Workflows** GitHub Action can export all n8n workflows to a Snowflake stage on a schedule. See [backup-recovery.md](backup-recovery.md) for setup and recovery procedures.
