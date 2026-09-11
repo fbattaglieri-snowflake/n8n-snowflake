@@ -4,11 +4,12 @@ set -euo pipefail
 REPOSITORY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPOSITORY_ROOT"
 
-python -m py_compile proxy/cortex/cortex_proxy.py proxy/ingress/n8n_ingress_proxy.py scripts/bootstrap_postgres.py
-ruff check proxy scripts
-pytest proxy -q
+python3 -m py_compile proxy/cortex/cortex_proxy.py proxy/ingress/n8n_ingress_proxy.py scripts/bootstrap_postgres.py scripts/export_workflows.py
+python3 -m ruff check proxy scripts tests
+python3 -m pytest proxy tests -q
 node --check docker/n8n/patch-snowflake-spcs-oauth.js
-python -m json.tool proxy/cortex/models.json >/dev/null
+bash -n scripts/wait_for_services.sh
+python3 -m json.tool proxy/cortex/models.json >/dev/null
 yamllint -d '{extends: default, rules: {line-length: disable, document-start: disable, truthy: disable, empty-lines: disable, braces: disable}}' \
   .github infrastructure/specs
 
