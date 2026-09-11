@@ -1,4 +1,6 @@
-FROM python:3.12-slim
+FROM python:3.12-alpine3.24
+
+RUN apk upgrade --no-cache
 
 COPY cortex_proxy.py /opt/cortex_proxy.py
 COPY models.json /opt/models.json

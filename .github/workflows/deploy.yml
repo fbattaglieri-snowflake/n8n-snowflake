@@ -6,7 +6,7 @@ on:
       n8n_version:
         description: Explicit upstream n8n release
         required: true
-        default: "2.34.5"
+        default: "2.38.6"
 
 permissions:
   contents: read
