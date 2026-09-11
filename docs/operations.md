@@ -2,7 +2,9 @@
 
 ## Upgrade
 
-Run the **Deploy to Snowflake** workflow with an explicit n8n version. The workflow builds immutable images tagged with the Git commit SHA, pushes them to Snowflake, stages service specifications, and upgrades services with `ALTER SERVICE`.
+Run the **Deploy to Snowflake** workflow with an explicit n8n version. Images are tagged with commit SHA, run ID and attempt, so rerunning the same commit does not overwrite the previous build. This is not digest enforcement: operators must still prevent manual tag replacement. The workflow pushes images, stages specifications and upgrades services with `ALTER SERVICE`.
+
+Deployment polls all reported containers for READY, failing after a readiness deadline. This verifies container readiness, not an authenticated application or restore smoke test. Deployment and backup require separate operator approval and have not been exercised end to end by the offline repository tests.
 
 Never drop and recreate the n8n service during a routine upgrade. Dropping the service can detach or delete its block volume and changes the ingress URL.
 
@@ -27,6 +29,6 @@ Starting the compute pool before Postgres can cause n8n to crash and restart rep
 
 ## Backup
 
-Create a block-volume snapshot before high-risk changes. Use Snowflake Postgres point-in-time recovery or a fork for database recovery testing.
+Verify an independent backup before high-risk changes. Confirm the database retention and recovery window before relying on point-in-time recovery.
 
-An optional **Backup Workflows** GitHub Action can export all n8n workflows to a Snowflake stage on a schedule. See [backup-recovery.md](backup-recovery.md) for setup and recovery procedures.
+The optional, manual **Backup Workflows** action exports workflow definitions to an existing private stage. It is not a full database/credential backup and no schedule is configured. See [backup-recovery.md](backup-recovery.md) for prerequisites and restore acceptance criteria.

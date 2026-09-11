@@ -60,8 +60,17 @@ jobs:
           file: ${{ matrix.image.dockerfile }}
           platforms: linux/amd64
           push: false
+          load: true
           tags: ${{ matrix.image.tag }}
           build-args: |
             N8N_VERSION=${{ vars.N8N_VERSION || '2.34.5' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - name: Scan built image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ matrix.image.tag }}
+          scanners: vuln
+          severity: CRITICAL,HIGH
+          exit-code: "1"
