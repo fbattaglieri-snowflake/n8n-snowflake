@@ -9,9 +9,15 @@ RUN git clone --depth 1 --branch "n8n@${N8N_VERSION}" \
 FROM alpine:3.24 AS python
 RUN apk add --no-cache python3 python3-dev py3-pip
 
+FROM alpine:3.24 AS package-tools
+RUN apk add --no-cache apk-tools-static
+
 FROM n8nio/n8n:${N8N_VERSION}
 
 USER root
+
+COPY --from=package-tools /sbin/apk.static /tmp/apk.static
+RUN /tmp/apk.static upgrade --no-cache && rm /tmp/apk.static
 
 COPY --from=python /usr/bin/python3 /usr/bin/python3
 COPY --from=python /usr/lib/python3.14 /usr/lib/python3.14
