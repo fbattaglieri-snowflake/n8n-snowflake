@@ -17,6 +17,7 @@ COPY --from=python /usr/bin/python3 /usr/bin/python3
 COPY --from=python /usr/lib/python3.14 /usr/lib/python3.14
 COPY --from=python /usr/lib/libpython3.14.so.1.0 /usr/lib/libpython3.14.so.1.0
 COPY --from=python /usr/lib/libpython3.so /usr/lib/libpython3.so
+COPY --from=python /usr/lib/libsqlite3.so.0 /usr/lib/libsqlite3.so.0
 COPY --from=source /src/n8n/packages/@n8n/task-runner-python \
   /usr/local/lib/node_modules/@n8n/task-runner-python
 COPY patch-snowflake-spcs-oauth.js /tmp/patch-snowflake-spcs-oauth.js
