@@ -40,7 +40,7 @@ RUN ln -sf /usr/bin/python3 /usr/bin/python && \
     /usr/local/lib/node_modules/@n8n/task-runner-python/.venv/bin/pip install \
       --no-cache-dir "urllib3==2.7.0" "websockets>=15.0.1,<16" && \
     python3 -m pip install --break-system-packages --no-cache-dir \
-      "msgpack==1.2.1" "setuptools==78.1.1" && \
+      "msgpack==1.2.1" "setuptools==84.0.0" && \
     python3 -m pip check
 
 USER node
