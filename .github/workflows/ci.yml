@@ -40,6 +40,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         image:
           - context: docker/n8n
