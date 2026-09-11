@@ -17,7 +17,9 @@ FROM n8nio/n8n:${N8N_VERSION}
 USER root
 
 COPY --from=package-tools /sbin/apk.static /tmp/apk.static
-RUN /tmp/apk.static upgrade --no-cache && rm /tmp/apk.static
+RUN /tmp/apk.static upgrade --no-cache && \
+    /tmp/apk.static add --no-cache 'libcrypto3>=3.5.8-r0' 'libssl3>=3.5.8-r0' 'libexpat>=2.8.4-r0' && \
+    rm /tmp/apk.static
 
 COPY --from=python /usr/bin/python3 /usr/bin/python3
 COPY --from=python /usr/lib/python3.14 /usr/lib/python3.14
@@ -36,7 +38,10 @@ RUN ln -sf /usr/bin/python3 /usr/bin/python && \
     /usr/local/lib/node_modules/@n8n/task-runner-python/.venv/bin/pip install \
       --no-cache-dir --upgrade pip && \
     /usr/local/lib/node_modules/@n8n/task-runner-python/.venv/bin/pip install \
-      --no-cache-dir "urllib3==2.7.0" "websockets>=15.0.1,<16"
+      --no-cache-dir "urllib3==2.7.0" "websockets>=15.0.1,<16" && \
+    python3 -m pip install --break-system-packages --no-cache-dir \
+      "msgpack==1.2.1" "setuptools==78.1.1" && \
+    python3 -m pip check
 
 USER node
 
