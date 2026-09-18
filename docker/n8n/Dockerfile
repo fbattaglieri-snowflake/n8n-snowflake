@@ -7,7 +7,18 @@ RUN git clone --depth 1 --branch "n8n@${N8N_VERSION}" \
       https://github.com/n8n-io/n8n.git /src/n8n
 
 FROM alpine:3.24 AS python
-RUN apk add --no-cache python3 python3-dev py3-pip
+# The interpreter tree produced here is copied wholesale into the final image,
+# so it is the tree that has to be clean: upgrading only the final image leaves
+# the distro-managed copy of setuptools in place, with its metadata still
+# recording the vulnerable version, and the image scan then reports a package
+# that no pin in the final stage appears to govern.
+RUN apk add --no-cache python3 python3-dev py3-pip && \
+    python3 -m pip install --break-system-packages --no-cache-dir \
+      --upgrade --force-reinstall "setuptools==84.0.0" "msgpack==1.2.1" && \
+    find /usr/lib/python3.14 -maxdepth 3 -name 'setuptools-*.dist-info' \
+      -not -name 'setuptools-84.0.0.dist-info' -exec rm -rf {} + && \
+    find /usr/lib/python3.14 -maxdepth 3 -name 'msgpack-*.dist-info' \
+      -not -name 'msgpack-1.2.1.dist-info' -exec rm -rf {} +
 
 FROM alpine:3.24 AS package-tools
 RUN apk add --no-cache apk-tools-static
@@ -42,6 +53,16 @@ RUN ln -sf /usr/bin/python3 /usr/bin/python && \
     python3 -m pip install --break-system-packages --no-cache-dir \
       "msgpack==1.2.1" "setuptools==84.0.0" && \
     python3 -m pip check
+
+# Assert the floors the image scan enforces, while the paths are still visible.
+#
+# The scan reports a package name and a version but frequently no path, so a
+# stale second copy in one of the several interpreter trees in this image is
+# expensive to locate from the report alone. Failing here instead names the
+# directory.
+COPY assert_python_floors.py /tmp/assert_python_floors.py
+RUN python3 /tmp/assert_python_floors.py setuptools=78.1.1 msgpack=1.2.1 && \
+    rm /tmp/assert_python_floors.py
 
 USER node
 

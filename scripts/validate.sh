@@ -4,8 +4,8 @@ set -euo pipefail
 REPOSITORY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPOSITORY_ROOT"
 
-python3 -m py_compile proxy/cortex/cortex_proxy.py proxy/ingress/n8n_ingress_proxy.py scripts/bootstrap_postgres.py scripts/export_workflows.py
-python3 -m ruff check proxy scripts tests
+python3 -m py_compile proxy/cortex/cortex_proxy.py proxy/ingress/n8n_ingress_proxy.py scripts/bootstrap_postgres.py scripts/export_workflows.py scripts/summarize_trivy.py docker/n8n/assert_python_floors.py
+python3 -m ruff check proxy scripts tests docker/n8n
 python3 -m pytest proxy tests -q
 node --check docker/n8n/patch-snowflake-spcs-oauth.js
 bash -n scripts/wait_for_services.sh
