@@ -60,8 +60,24 @@ jobs:
           file: ${{ matrix.image.dockerfile }}
           platforms: linux/amd64
           push: false
+          load: true
           tags: ${{ matrix.image.tag }}
           build-args: |
-            N8N_VERSION=${{ vars.N8N_VERSION || '2.34.5' }}
+            N8N_VERSION=2.41.5
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - name: Smoke test n8n runtime
+        if: matrix.image.tag == 'n8n-snowflake:test'
+        run: |
+          docker run --rm --network none --entrypoint n8n n8n-snowflake:test --version
+          docker run --rm --network none --entrypoint python3 n8n-snowflake:test -c 'import ssl, sqlite3'
+          docker run --rm --network none -v "$PWD/docker/n8n/smoke-test.js:/tmp/smoke-test.js:ro" --entrypoint node n8n-snowflake:test /tmp/smoke-test.js 2.41.5
+      - name: Scan complete n8n image
+        if: matrix.image.tag == 'n8n-snowflake:test'
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: n8n-snowflake:test
+          scanners: vuln
+          severity: CRITICAL,HIGH
+          exit-code: "1"

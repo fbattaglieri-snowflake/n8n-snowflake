@@ -22,7 +22,7 @@ Configure these as GitHub **repository variables**, not secrets:
 | `POSTGRES_INGRESS_CIDR` | `10.0.0.0/16` | Allowed Postgres ingress CIDR. |
 | `N8N_IMAGE_REPOSITORY` | `N8N_IMAGES` | n8n image repository. |
 | `CORTEX_PROXY_IMAGE_REPOSITORY` | `CORTEX_PROXY_IMAGES` | Proxy image repository. |
-| `N8N_VERSION` | `2.34.5` | Explicit upstream n8n release. |
+| `N8N_VERSION` | `2.41.5` | Explicit upstream n8n release; CI tests the pinned Dockerfile release, not a repository-variable override. |
 
 ## GitHub Secrets
 
