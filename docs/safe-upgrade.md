@@ -11,6 +11,10 @@ installed filesystem. These are scanner findings, not counts of unique CVEs.
 There are no HIGH/CRITICAL OS findings after explicitly refreshing OpenSSL and
 Expat; no dependency trees or unfixed findings are excluded from the image scan.
 
+The ingress client's PyJWT pin is also updated to 2.15.0, matching the pending
+Dependabot update, to resolve repository dependency-scan findings. This does not
+restart or modify an already running local proxy.
+
 Affected JavaScript packages include axios, nodemailer, toml, undici,
 @grpc/grpc-js, @tiptap/core, @xmldom/xmldom, adm-zip, brace-expansion, and fast-uri.
 Some available fixes require major dependency changes. Do not overwrite pnpm
