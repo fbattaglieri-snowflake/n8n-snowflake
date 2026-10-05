@@ -8,6 +8,11 @@ and cannot pass the gate. CI Actions are pinned to commits, matrix jobs continue
 independently, and check names remain stable for protected-branch requirements.
 The historical candidate results below are not a substitute for the latest CI.
 
+The proxy candidate uses the same Python 3.12 Alpine base and package refresh as
+the reliability branch. The complete scan exposed HIGH findings in the previous
+Debian slim base. This is an image candidate change only, not a proxy deployment;
+runtime smoke checks and the full scan remain required.
+
 ## Candidate status: 2026-10-01
 
 The candidate is n8n **2.41.5**. It is not deployment-approved. Image build,
