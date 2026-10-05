@@ -18,7 +18,7 @@ USER root
 
 COPY --from=package-tools /sbin/apk.static /tmp/apk.static
 RUN /tmp/apk.static upgrade --no-cache && \
-    /tmp/apk.static add --no-cache 'libcrypto3>=3.5.8-r0' 'libssl3>=3.5.8-r0' 'libexpat>=2.8.5-r0' && \
+    /tmp/apk.static add --no-cache 'libcrypto3>=3.5.8-r0' 'libssl3>=3.5.8-r0' 'libexpat>=2.8.5-r0' 'pcre2>=10.49-r0' && \
     rm /tmp/apk.static
 
 COPY --from=python /usr/bin/python3 /usr/bin/python3
