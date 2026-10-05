@@ -1,5 +1,13 @@
 # Safe n8n upgrades on SPCS
 
+## CI coverage
+
+Both the n8n and Cortex proxy images have complete blocking HIGH/CRITICAL scans,
+including upstream packages and unfixed findings. A failed build is not scanned
+and cannot pass the gate. CI Actions are pinned to commits, matrix jobs continue
+independently, and check names remain stable for protected-branch requirements.
+The historical candidate results below are not a substitute for the latest CI.
+
 ## Candidate status: 2026-10-01
 
 The candidate is n8n **2.41.5**. It is not deployment-approved. Image build,
