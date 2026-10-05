@@ -34,3 +34,17 @@ The bootstrap role is used only to establish infrastructure. The production depl
 
 CI runs Gitleaks and Trivy. GitHub secret scanning and push protection should also be enabled when available for the repository and account plan.
 
+## Container Image Vulnerability Gate
+
+Every pull request builds both images and runs complete blocking HIGH/CRITICAL
+scans, including upstream dependencies and unfixed findings. A failed build skips
+its scan; it does not pass the security gate. The other matrix job continues.
+The summary reports findings even when the scan fails. Check names are explicit
+and stable, independent of additional matrix metadata.
+
+Unresolved upstream findings remain release blockers. Do not override upstream
+locked dependency trees or delete package metadata to hide findings. Package
+floor assertions supplement, not replace, complete scans. Old partial-scan runs
+are not evidence of complete image coverage. Tag-only bases remain a
+reproducibility limitation; green tests are not a blanket security guarantee.
+

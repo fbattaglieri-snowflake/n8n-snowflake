@@ -1,5 +1,13 @@
 version: 2
 updates:
+  - package-ecosystem: docker
+    directory: /docker/n8n
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: /proxy/cortex
+    schedule:
+      interval: weekly
   - package-ecosystem: github-actions
     directory: /
     schedule:

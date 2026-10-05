@@ -6,7 +6,7 @@ on:
       n8n_version:
         description: Explicit upstream n8n release
         required: true
-        default: "2.34.5"
+        default: "2.38.6"
 
 permissions:
   contents: read
@@ -21,11 +21,11 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - uses: docker/setup-buildx-action@v4
-      - uses: snowflakedb/snowflake-actions@v3
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
+      - uses: snowflakedb/snowflake-actions@1160898243c351349621a6c2bac2e455ab1077b2 # v3
         with:
           use-oidc: true
           cli-version: "3.16"
@@ -46,17 +46,19 @@ jobs:
           snow spcs image-registry token -x --format JSON \
             | python -c 'import json,sys; print(json.load(sys.stdin)[0]["token"])' \
             | docker login "$registry" -u 0sessiontoken --password-stdin
-      - name: Build and push immutable images
+      - name: Build and push uniquely tagged images
         env:
           REGISTRY: ${{ steps.registry.outputs.registry }}
           DATABASE: ${{ vars.SNOWFLAKE_DATABASE }}
           SCHEMA: ${{ vars.SNOWFLAKE_SCHEMA }}
           N8N_REPOSITORY: ${{ vars.N8N_IMAGE_REPOSITORY }}
           PROXY_REPOSITORY: ${{ vars.CORTEX_PROXY_IMAGE_REPOSITORY }}
-          IMAGE_TAG: ${{ github.sha }}
+          IMAGE_TAG: ${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          N8N_VERSION: ${{ inputs.n8n_version }}
         run: |
+          [[ "$N8N_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
           docker buildx build --platform linux/amd64 --push \
-            --build-arg "N8N_VERSION=${{ inputs.n8n_version }}" \
+            --build-arg "N8N_VERSION=$N8N_VERSION" \
             -t "${REGISTRY}/${DATABASE,,}/${SCHEMA,,}/${N8N_REPOSITORY,,}/n8n:${IMAGE_TAG}" \
             docker/n8n
           docker buildx build --platform linux/amd64 --push \
@@ -109,7 +111,7 @@ jobs:
             -D "compute_pool=${{ vars.N8N_COMPUTE_POOL }}" \
             -D "n8n_image_repository=${{ vars.N8N_IMAGE_REPOSITORY }}" \
             -D "proxy_image_repository=${{ vars.CORTEX_PROXY_IMAGE_REPOSITORY }}" \
-            -D "image_tag=${{ github.sha }}" \
+            -D "image_tag=${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}" \
             -D "postgres_host=${{ steps.postgres.outputs.host }}" \
             -D "postgres_database=${{ steps.postgres.outputs.database }}" \
             -D "egress_integration=N8N_EGRESS_EAI"
@@ -118,8 +120,10 @@ jobs:
           SNOWFLAKE_ACCOUNT: ${{ vars.SNOWFLAKE_ACCOUNT }}
           SNOWFLAKE_USER: ${{ vars.SNOWFLAKE_DEPLOY_USER }}
           SNOWFLAKE_ROLE: ${{ vars.SNOWFLAKE_DEPLOY_ROLE }}
+          SERVICE_DATABASE: ${{ vars.SNOWFLAKE_DATABASE }}
+          SERVICE_SCHEMA: ${{ vars.SNOWFLAKE_SCHEMA }}
         run: |
-          sleep 30
+          bash scripts/wait_for_services.sh "$SERVICE_DATABASE.$SERVICE_SCHEMA.CORTEX_PROXY_SERVICE" "$SERVICE_DATABASE.$SERVICE_SCHEMA.N8N_SERVICE"
           snow sql -x --local-only --filename infrastructure/sql/30_verify.sql \
             -D "deploy_role=${{ vars.SNOWFLAKE_DEPLOY_ROLE }}" \
             -D "database=${{ vars.SNOWFLAKE_DATABASE }}" \
