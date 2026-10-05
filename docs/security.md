@@ -36,18 +36,15 @@ CI runs Gitleaks and Trivy. GitHub secret scanning and push protection should al
 
 ## Container Image Vulnerability Gate
 
-Every pull request builds both images and scans them twice.
+Every pull request builds both images and runs complete blocking HIGH/CRITICAL
+scans, including upstream dependencies and unfixed findings. A failed build skips
+its scan; it does not pass the security gate. The other matrix job continues.
+The summary reports findings even when the scan fails. Check names are explicit
+and stable, independent of additional matrix metadata.
 
-The **blocking** scan fails the build on CRITICAL and HIGH vulnerabilities, restricted to what this repository can fix. Two categories are excluded:
-
-- **Unfixed vulnerabilities** (`ignore-unfixed`). A CVE with no released fix cannot be cleared by any change here. Blocking on it would make every build red regardless of the diff, which trains reviewers to ignore the gate.
-- **The upstream n8n dependency tree** (`usr/local/lib/node_modules/n8n/node_modules`). These packages arrive inside the `n8nio/n8n` base image and are replaced only by a new upstream release. The lever is the `N8N_VERSION` pin, not a package override: forcing a newer version inside that tree would ship a combination upstream never tested.
-
-The **advisory** scan covers the whole image, including both excluded categories, and never fails the build. Its purpose is that the excluded debt stays visible on every run rather than disappearing from view. Both scans are rendered by `scripts/summarize_trivy.py`, which prints CVE identifiers, installed and fixed versions, and the package path to the job summary.
-
-Consequences to keep in mind:
-
-- A red build means there is an action to take. Treat it as such.
-- A growing advisory list is the signal to bump `N8N_VERSION`. Review it when deciding whether an upstream upgrade is due.
-- Packages installed by this repository are governed at build time by `docker/n8n/assert_python_floors.py`, which fails the build if any copy of a distribution is below its security floor and names the directory holding it. Adding a pin without raising the floor leaves the gap the assertion exists to catch.
+Unresolved upstream findings remain release blockers. Do not override upstream
+locked dependency trees or delete package metadata to hide findings. Package
+floor assertions supplement, not replace, complete scans. Old partial-scan runs
+are not evidence of complete image coverage. Tag-only bases remain a
+reproducibility limitation; green tests are not a blanket security guarantee.
 
