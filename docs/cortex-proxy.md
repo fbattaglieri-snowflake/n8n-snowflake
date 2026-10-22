@@ -57,6 +57,43 @@ models with no external provider in the path: prompts and data never leave Snowf
 
 For a complete working example, see [`examples/memory-tour`](../examples/memory-tour).
 
+## Promoting New Models Safely
+
+`GET /v1/models` is a configured catalogue, not evidence that a model can serve
+requests. `SHOW CORTEX BASE MODELS` can list models that work through SQL but fail
+on `/api/v2/cortex/v1/chat/completions`. Verify each candidate on the endpoint,
+account, role and region that the workflow actually uses.
+
+Before adding a model:
+
+1. Test a non-empty text response with a sufficient output budget. HTTP 200 with
+   empty content and `finish_reason: length` is not a successful text test.
+2. For AI Agent nodes, require actual tool calls with valid names and JSON
+   arguments, then return every result and verify the complete conversation.
+   Acceptance of a `tools` parameter alone is not enough.
+3. Test streaming separately through the deployed proxy: reconstruct parallel
+   tool calls, check their IDs and arguments, and verify stream termination and
+   final text. A successful non-streaming request does not cover this path.
+4. Repeat failures to distinguish authentication, transient errors, unsupported
+   capabilities and models not served on that endpoint. Do not remove working
+   entries merely because one probe timed out.
+5. Back up the current catalogue privately and review an additive diff. Preserve
+   workflow-selected models and credentials; adding an option must not switch
+   an active workflow or publish a draft.
+6. Upload only the reviewed catalogue and verify the serving process picked it
+   up. If stage-mounted, allow for its metadata cache before considering a
+   restart. Keep the previous file available for rollback.
+
+The public sample catalogue is not an account-wide compatibility guarantee.
+Keep account-specific probe results, private workflow exports and service specs
+outside this repository. Use the deployed catalogue's format: this proxy accepts
+model IDs, while other consumers may require a model-to-context-window mapping.
+
+If a candidate works only through SQL, evaluate it in a separate SQL inference
+workflow rather than advertising it as an OpenAI-compatible agent model. Do not
+upgrade the n8n application, alter its database, or rebuild its image merely to
+make a new model appear in a dropdown.
+
 ## SQL Safety
 
 Use SQL API parameter bindings for dynamic workflow values. Do not concatenate LLM output, user input, or workflow variables into SQL text.
