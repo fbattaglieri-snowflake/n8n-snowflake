@@ -18,7 +18,7 @@ USER root
 
 COPY --from=package-tools /sbin/apk.static /tmp/apk.static
 RUN /tmp/apk.static upgrade --no-cache && \
-    /tmp/apk.static add --no-cache 'libcrypto3>=3.5.8-r0' 'libssl3>=3.5.8-r0' 'libexpat>=2.8.5-r0' 'pcre2>=10.49-r0' && \
+    /tmp/apk.static add --no-cache 'libcrypto3>=3.5.8-r0' 'libssl3>=3.5.8-r0' 'libexpat>=2.9.0-r0' 'pcre2>=10.49-r0' && \
     rm /tmp/apk.static
 
 COPY --from=python /usr/bin/python3 /usr/bin/python3
@@ -38,7 +38,14 @@ RUN ln -sf /usr/bin/python3 /usr/bin/python && \
     /usr/local/lib/node_modules/@n8n/task-runner-python/.venv/bin/pip install \
       --no-cache-dir --upgrade pip && \
     /usr/local/lib/node_modules/@n8n/task-runner-python/.venv/bin/pip install \
-      --no-cache-dir "urllib3==2.8.0" "websockets>=15.0.1,<16"
+      --no-cache-dir "urllib3==2.8.0" "websockets>=15.0.1,<16" && \
+    # pip is only needed to build the venv. Its vendored copies of msgpack,
+    # urllib3 and setuptools are reported as HIGH findings and are never used
+    # by the task runner, so the installer itself is removed from the image.
+    /usr/local/lib/node_modules/@n8n/task-runner-python/.venv/bin/python -m pip uninstall -y pip && \
+    rm -rf /usr/lib/python3.14/site-packages/pip /usr/lib/python3.14/site-packages/pip-*.dist-info \
+      /usr/lib/python3.14/ensurepip/_bundled && \
+    /usr/local/lib/node_modules/@n8n/task-runner-python/.venv/bin/python -c "import urllib3, websockets"
 
 USER node
 
