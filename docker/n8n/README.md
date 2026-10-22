@@ -11,8 +11,8 @@ Build with:
 
 ```bash
 docker build --platform linux/amd64 \
-  --build-arg N8N_VERSION=2.41.5 \
-  -t n8n-snowflake:2.41.5 \
+  --build-arg N8N_VERSION=2.44.5 \
+  -t n8n-snowflake:2.44.5 \
   docker/n8n
 ```
 
@@ -27,6 +27,6 @@ Run the credential-free smoke check against the built image:
 ```bash
 docker run --rm --network none \
   -v "$PWD/docker/n8n/smoke-test.js:/tmp/smoke-test.js:ro" \
-  --entrypoint node n8n-snowflake:2.41.5 /tmp/smoke-test.js 2.41.5
+  --entrypoint node n8n-snowflake:2.44.5 /tmp/smoke-test.js 2.44.5
 ```
 

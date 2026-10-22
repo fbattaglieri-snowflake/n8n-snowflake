@@ -67,7 +67,7 @@ jobs:
           load: true
           tags: ${{ matrix.image.tag }}
           build-args: |
-            N8N_VERSION=2.41.5
+            N8N_VERSION=2.44.5
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Smoke test n8n runtime
@@ -75,7 +75,7 @@ jobs:
         run: |
           docker run --rm --network none --entrypoint n8n n8n-snowflake:test --version
           docker run --rm --network none --entrypoint python3 n8n-snowflake:test -c 'import ssl, sqlite3'
-          docker run --rm --network none -v "$PWD/docker/n8n/smoke-test.js:/tmp/smoke-test.js:ro" --entrypoint node n8n-snowflake:test /tmp/smoke-test.js 2.41.5
+          docker run --rm --network none -v "$PWD/docker/n8n/smoke-test.js:/tmp/smoke-test.js:ro" --entrypoint node n8n-snowflake:test /tmp/smoke-test.js 2.44.5
       - name: Smoke test proxy runtime
         if: matrix.image.tag == 'cortex-proxy:test'
         run: |

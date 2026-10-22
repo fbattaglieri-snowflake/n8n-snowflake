@@ -15,7 +15,7 @@ runtime smoke checks and the full scan remain required.
 
 ## Candidate status: 2026-10-01
 
-The candidate is n8n **2.41.5**. It is not deployment-approved. Image build,
+The candidate is n8n **2.44.5**. It is not deployment-approved. Image build,
 version reporting, native Snowflake OAuth patch checks, Python SSL/SQLite imports,
 and local repository validation passed. The full image scan remains blocking:
 38 HIGH JavaScript findings across 10 upstream dependency packages, plus four
