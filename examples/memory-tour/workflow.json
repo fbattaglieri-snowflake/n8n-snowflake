@@ -314,8 +314,8 @@
     {
       "id": "snowflake-llms",
       "name": "Snowflake LLMs",
-      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
-      "typeVersion": 1.3,
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.6,
       "position": [
         2520,
         520
@@ -324,18 +324,19 @@
         "model": {
           "__rl": true,
           "mode": "id",
-          "value": "claude-sonnet-5"
+          "value": "claude-sonnet-5-5"
         },
-        "responsesApiEnabled": false,
-        "options": {}
-      },
-      "credentials": {
-        "openAiApi": {
-          "id": "REPLACE_WITH_YOUR_OPENAI_CREDENTIAL_ID",
-          "name": "Snowflake LLMs"
+        "options": {
+          "maxTokensToSample": 4096
         }
       },
-      "notes": "OpenAI-compatible credential pointed at the Cortex proxy. Responses API is off: the proxy implements /v1/chat/completions only."
+      "credentials": {
+        "anthropicApi": {
+          "id": "REPLACE_WITH_YOUR_ANTHROPIC_CREDENTIAL_ID",
+          "name": "Snowflake Cortex Standard - Messages (/messages)"
+        }
+      },
+      "notes": "Anthropic Messages API (/messages) pointed at the Universal LLM Proxy (LLM_PROXY_STANDARD:8080/messages)."
     },
     {
       "id": "simple-memory",
@@ -424,7 +425,7 @@
         300
       ],
       "parameters": {
-        "jsCode": "// One readable summary of what was written and what was read back.\nconst init = $('Init run').first().json;\nconst search = $('Parse search hit').first().json;\nconst pgRows = $('Read Postgres directly').all().map((item) => item.json);\nconst agent = $input.first().json;\nconst agentText = agent.output || agent.text || JSON.stringify(agent).slice(0, 800);\n\nconst lines = [];\nlines.push('SNOWFLAKE MEMORY TOUR - run ' + init.run_id);\nlines.push('started ' + init.started_at);\nlines.push('');\nlines.push('1. STANDARD TABLE  MEMORY_DEMO.CORE.SERVICE_TICKETS');\nlines.push('   wrote   1 ticket with parameter binding, then updated severity and status');\nlines.push('   read    through Cortex Analyst in natural language');\nlines.push('   answer  ' + String(search.analyst_answer).replace(/\\n+/g, ' ').slice(0, 400));\nlines.push('');\nlines.push('2. DOCUMENT CORPUS  MEMORY_DEMO.CORE.SERVICE_DOCS + DOC_SEARCH');\nlines.push('   wrote   1 runbook chunk tagged with this run id');\nlines.push('   read    through Cortex Search, ' + search.search_hits + ' hits');\nlines.push('   top hit ' + search.search_top_title +\n  (search.search_top_is_from_this_run ? ' (written by this run)' : ' (pre-existing document)'));\nlines.push('   the search was filtered on this run id, so a hit proves the chunk was indexed');\nlines.push('');\nlines.push('3. SNOWFLAKE POSTGRES  demo_events on MEMORY_DEMO_PG');\nlines.push('   wrote   1 event, then updated its status');\nlines.push('   read    directly with SQL, ' + pgRows.length + ' row(s) for this run');\npgRows.forEach((row) => {\n  lines.push('   row     id=' + row.event_id + ' status=' + row.status + ' site=' + row.site);\n});\nlines.push('');\nlines.push('4. AI AGENT, LLM SERVED BY SNOWFLAKE CORTEX THROUGH THE PRIVATE PROXY');\nlines.push('   model   claude-sonnet-5 via cortex-proxy-service, no external provider');\nlines.push('   tools   ticket_stats (SQL API), search_procedures (Cortex Search), ' +\n  'recent_events (Postgres)');\nlines.push('   answer  ' + String(agentText).replace(/\\n+/g, ' ').slice(0, 1200));\n\nreturn [{ json: {\n  run_id: init.run_id,\n  report: lines.join('\\n'),\n  analyst_ok: search.analyst_ok,\n  search_ok: search.search_hits > 0,\n  postgres_rows: pgRows.length,\n  agent_answer: agentText,\n} }];\n"
+        "jsCode": "// One readable summary of what was written and what was read back.\nconst init = $('Init run').first().json;\nconst search = $('Parse search hit').first().json;\nconst pgRows = $('Read Postgres directly').all().map((item) => item.json);\nconst agent = $input.first().json;\nconst agentText = agent.output || agent.text || JSON.stringify(agent).slice(0, 800);\n\nconst lines = [];\nlines.push('SNOWFLAKE MEMORY TOUR - run ' + init.run_id);\nlines.push('started ' + init.started_at);\nlines.push('');\nlines.push('1. STANDARD TABLE  MEMORY_DEMO.CORE.SERVICE_TICKETS');\nlines.push('   wrote   1 ticket with parameter binding, then updated severity and status');\nlines.push('   read    through Cortex Analyst in natural language');\nlines.push('   answer  ' + String(search.analyst_answer).replace(/\\n+/g, ' ').slice(0, 400));\nlines.push('');\nlines.push('2. DOCUMENT CORPUS  MEMORY_DEMO.CORE.SERVICE_DOCS + DOC_SEARCH');\nlines.push('   wrote   1 runbook chunk tagged with this run id');\nlines.push('   read    through Cortex Search, ' + search.search_hits + ' hits');\nlines.push('   top hit ' + search.search_top_title +\n  (search.search_top_is_from_this_run ? ' (written by this run)' : ' (pre-existing document)'));\nlines.push('   the search was filtered on this run id, so a hit proves the chunk was indexed');\nlines.push('');\nlines.push('3. SNOWFLAKE POSTGRES  demo_events on MEMORY_DEMO_PG');\nlines.push('   wrote   1 event, then updated its status');\nlines.push('   read    directly with SQL, ' + pgRows.length + ' row(s) for this run');\npgRows.forEach((row) => {\n  lines.push('   row     id=' + row.event_id + ' status=' + row.status + ' site=' + row.site);\n});\nlines.push('');\nlines.push('4. AI AGENT, LLM SERVED BY SNOWFLAKE CORTEX THROUGH THE UNIVERSAL LLM PROXY');\nlines.push('   model   claude-sonnet-5-5 via llm-proxy-standard (/messages/v1/messages), no external provider');\nlines.push('   tools   ticket_stats (SQL API), search_procedures (Cortex Search), ' +\n  'recent_events (Postgres)');\nlines.push('   answer  ' + String(agentText).replace(/\\n+/g, ' ').slice(0, 1200));\n\nreturn [{ json: {\n  run_id: init.run_id,\n  report: lines.join('\\n'),\n  analyst_ok: search.analyst_ok,\n  search_ok: search.search_hits > 0,\n  postgres_rows: pgRows.length,\n  agent_answer: agentText,\n} }];\n"
       }
     },
     {
@@ -517,9 +518,9 @@
         60
       ],
       "parameters": {
-        "content": "## 4. One agent over all three memories\nThe LLM is served by Snowflake Cortex through the same private proxy, exposed as an OpenAI-compatible endpoint. No data and no prompt leaves Snowflake.\n\nThe proxy collapses parallel tool calls: without that, Cortex rejects any agent turn with more than one tool call.",
-        "height": 220,
-        "width": 640,
+        "content": "## 4. One agent over all three memories (Universal LLM Proxy — Messages API)\nThe LLM (`claude-sonnet-5-5`) is served by Snowflake Cortex through the private Universal LLM Proxy (`llm-proxy-standard:8080/messages`), exposed as a native Anthropic Messages endpoint. No data and no prompt leaves Snowflake.\n\nThe proxy's `ProfileV2` normalizer and `ReplayCache` automatically preserve multi-turn tool call state and thinking blocks across tool executions.",
+        "height": 240,
+        "width": 660,
         "color": 6
       }
     }

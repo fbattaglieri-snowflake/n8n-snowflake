@@ -24,33 +24,31 @@ expired token, not an n8n bug. Inside the cluster the only credential that works
 service OAuth token at `/snowflake/session/token`, which a container cannot hand to n8n's
 HTTP node in a usable way.
 
-That is why the [Cortex proxy](cortex-proxy.md) exists. It reads the service token on
-every request and exposes three doors:
+That is why the internal SPCS proxy plane ([Cortex and SQL Proxy](cortex-proxy.md)) exists. It reads the service token on every request and exposes two dedicated internal endpoints:
 
-| Door | What goes through it |
+| Service & Door | What goes through it |
 |---|---|
-| `POST /api/v2/statements` | every SQL statement: DML, Cortex Analyst, Cortex Search, AI functions |
-| `POST /v1/chat/completions` | model inference for any OpenAI-compatible n8n node |
-| `GET /v1/models` | the model dropdown in the n8n credential |
+| `LLM_PROXY_STANDARD` — `POST /messages/v1/messages` & `GET /messages/v1/models` | Anthropic Messages API for Claude models (`lmChatAnthropic` with base URL `/messages`) |
+| `LLM_PROXY_STANDARD` — `POST /chat/v1/chat/completions` & `GET /chat/v1/models` | OpenAI Chat Completions API (`lmChatOpenAi` with `responsesApiEnabled = false`) |
+| `LLM_PROXY_STANDARD` — `POST /responses/v1/responses` & `GET /responses/v1/models` | OpenAI Responses API (`lmChatOpenAi` with `responsesApiEnabled = true`) |
+| `CORTEX_PROXY_SERVICE` — `POST /api/v2/statements` | every SQL statement: DML, Cortex Analyst (`DATA_AGENT_RUN`), Cortex Search (`SEARCH_PREVIEW`), AI functions |
 
 Two consequences worth internalising before you design anything:
 
-- **Cortex REST APIs other than chat completions are not reachable.** The proxy whitelists
-  exact paths, so `/api/v2/cortex/analyst/message` and the Cortex Search REST endpoint are
-  closed. Both capabilities are still fully available — through SQL, as shown below.
+- **Cortex Analyst and Cortex Search are called over SQL (`/api/v2/statements`).** Both capabilities are fully reachable through parameterized SQL statements (`SNOWFLAKE.CORTEX.DATA_AGENT_RUN` and `SNOWFLAKE.CORTEX.SEARCH_PREVIEW`), as shown below.
 - **Snowflake Postgres does not use the proxy at all.** It is a normal Postgres endpoint
   with its own credential, reached by n8n's native Postgres node over TCP.
 
 ```mermaid
 graph LR
-  n8n[n8n on SPCS] -->|"/api/v2/statements"| Proxy[Cortex proxy]
-  n8n -->|"/v1/chat/completions"| Proxy
+  n8n[n8n on SPCS] -->|"/messages | /chat/v1 | /responses/v1"| LLMProxy["Universal LLM Proxy (LLM_PROXY_STANDARD)"]
+  n8n -->|"/api/v2/statements"| SQLProxy["SQL API Proxy (CORTEX_PROXY_SERVICE)"]
   n8n -->|"TCP 5432, own credential"| PG[(Snowflake Postgres)]
-  Proxy -->|service OAuth token| SF[Snowflake]
+  LLMProxy -->|service OAuth token| CortexREST[Snowflake Cortex REST APIs]
+  SQLProxy -->|service OAuth token| SF[Snowflake SQL API]
   SF --- Tables[(Standard tables)]
   SF --- Analyst[Cortex Analyst]
   SF --- Search[Cortex Search]
-  SF --- Models[Cortex model inference]
 ```
 
 ## Storage 1: standard tables
@@ -299,40 +297,33 @@ demo that looks broken is actually working correctly.
 
 ## Model inference: LLMs served by Snowflake
 
-Any n8n node that speaks OpenAI can run on Cortex-served models. Create a credential of
-type **OpenAI**:
+With the companion Universal LLM Proxy ([`snowflake-proxy-cortexrestapi`](https://github.com/fbattaglieri-snowflake/snowflake-proxy-cortexrestapi), `LLM_PROXY_STANDARD :8080`), n8n nodes can call Cortex models across all three native protocols. Create three credentials in n8n (using `internal-spcs` as the placeholder API Key, since the proxy injects the SPCS OAuth token):
 
-- **Base URL**: `http://<proxy-dns-name>:8080/v1` — get the DNS name from
-  `SHOW SERVICES LIKE 'CORTEX_PROXY_SERVICE'`, column `dns_name`.
-- **API Key**: any placeholder. The proxy authenticates with the service OAuth token and
-  ignores this field, so **no secret is stored in n8n**.
-
-On the chat model node:
-
-- Pick the model from the list, populated by `GET /v1/models`.
-- **Turn "Use Responses API" off.** The proxy implements `/v1/chat/completions` only; with
-  the Responses API enabled the node calls `/v1/responses` and fails.
+1. **Anthropic Messages (`Snowflake Cortex Standard - Messages (/messages)`):**
+   - Credential type: **Anthropic** (`anthropicApi`), Base URL: `http://<llm-proxy-standard-dns>:8080/messages`
+   - Node: **Anthropic Chat Model** (`lmChatAnthropic`) — for `claude-sonnet-5-5`, `claude-opus-5-5`, `claude-haiku-5-5`.
+2. **OpenAI Chat Completions (`Snowflake Cortex Standard - Chat (/chat/v1)`):**
+   - Credential type: **OpenAI** (`openAiApi`), Base URL: `http://<llm-proxy-standard-dns>:8080/chat/v1`
+   - Node: **OpenAI Chat Model** (`lmChatOpenAi`) with **Use Responses API = `OFF`** (`responsesApiEnabled: false`, leave `maxTokens` unset) — for `openai-gpt-6-luna`, `openai-gpt-6-sol`, `grok-4.7`, `grok-4.6`, `glm-5.3`, `kimi-k3`.
+3. **OpenAI Responses (`Snowflake Cortex Standard - Responses (/responses/v1)`):**
+   - Credential type: **OpenAI** (`openAiApi`), Base URL: `http://<llm-proxy-standard-dns>:8080/responses/v1`
+   - Node: **OpenAI Chat Model** (`lmChatOpenAi`) with **Use Responses API = `ON`** (`responsesApiEnabled: true`) — for `openai-gpt-6.1-terra`, `openai-gpt-6.1-sol`, `openai-gpt-6-astra`.
 
 Prompts, data and answers never leave Snowflake. There is no third-party API key anywhere
 in the workflow.
 
-The model catalog is a file on a stage, mounted into the service and re-read without a
-rebuild, so adding a model is a file upload. Two fields describe tool-calling limits:
+The Universal LLM Proxy's `ProfileV2` normalizer and `ReplayCache` automatically handle:
+- Rehydrating `reasoning.encrypted_content` (Responses) and `thinking` signatures (Messages) when n8n strips them between tool turns.
+- Forcing `store: false` and stripping empty `"text": {}` objects on Responses requests.
+- Setting `reasoning_effort: "none"` on Chat models that require it when tools are bound (`openai-gpt-6-luna`, `openai-gpt-6-sol`).
 
-- `tools_unsupported`: models that cannot do tool calling at all. Small open-weight models
-  are typically here, which matters because **the AI Agent node requires tool calling**.
-- `tools_require_reasoning_effort_none`: models that reject a request carrying `tools`
-  unless `reasoning_effort` is explicitly `"none"`. The proxy sets it for them and also
-  retries adaptively on that error message, so an unlisted future model still works.
-
-Never add a model name you have not called. A wrong name returns `HTTP 400 unknown model`,
-which clients often surface as something misleading such as a context-length error.
+Never add a model name that has not been qualified against the target protocol. A wrong name returns `HTTP 400`, which clients often surface with a generic error message.
 
 For single-shot classification, extraction or summarisation over rows you already have in
 Snowflake, consider skipping inference in n8n entirely and using an AI function in SQL:
 
 ```sql
-SELECT AI_COMPLETE('claude-sonnet-5', 'Summarise: ' || NOTE) FROM MY_DB.MY_SCHEMA.TICKETS;
+SELECT AI_COMPLETE('claude-sonnet-5-5', 'Summarise: ' || NOTE) FROM MY_DB.MY_SCHEMA.TICKETS;
 ```
 
 That keeps the data and the compute together and costs one HTTP call for the whole batch
