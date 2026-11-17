@@ -5,8 +5,8 @@ model inference, agents, semantic querying, document retrieval and both kinds of
 storage. Every pattern here has been run end to end on a real deployment; the
 pitfalls sections describe failures that actually happened, not hypotheticals.
 
-For a single workflow that exercises all of it, see
-[`examples/memory-tour`](../examples/memory-tour).
+For two ready-to-import workflows with synthetic SQL data and least-privilege role setup, see
+[`examples/memory-tour`](../examples/memory-tour) and [`examples/llm-options`](../examples/llm-options).
 
 ## The one rule that shapes everything
 
@@ -24,13 +24,13 @@ expired token, not an n8n bug. Inside the cluster the only credential that works
 service OAuth token at `/snowflake/session/token`, which a container cannot hand to n8n's
 HTTP node in a usable way.
 
-That is why the internal SPCS proxy plane ([Cortex and SQL Proxy](cortex-proxy.md)) exists. It reads the service token on every request and exposes two dedicated internal endpoints:
+That is why the internal SPCS proxy plane ([Cortex Proxy vs. AI Gateway Guide](cortex-proxy.md)) exists. Deploy **either** Option A ([`snowflake-proxy-cortexrestapi`](https://github.com/fbattaglieri-snowflake/snowflake-proxy-cortexrestapi)) **or** Option B ([`snowflake-proxy-cortex-aigateway`](https://github.com/fbattaglieri-snowflake/snowflake-proxy-cortex-aigateway)) alongside `CORTEX_PROXY_SERVICE`:
 
 | Service & Door | What goes through it |
 |---|---|
-| `LLM_PROXY_STANDARD` — `POST /messages/v1/messages` & `GET /messages/v1/models` | Anthropic Messages API for Claude models (`lmChatAnthropic` with base URL `/messages`) |
-| `LLM_PROXY_STANDARD` — `POST /chat/v1/chat/completions` & `GET /chat/v1/models` | OpenAI Chat Completions API (`lmChatOpenAi` with `responsesApiEnabled = false`) |
-| `LLM_PROXY_STANDARD` — `POST /responses/v1/responses` & `GET /responses/v1/models` | OpenAI Responses API (`lmChatOpenAi` with `responsesApiEnabled = true`) |
+| `LLM_PROXY_STANDARD` *or* `LLM_PROXY_AIGATEWAY` — `/messages/v1/*` | Anthropic Messages API for Claude models (`lmChatAnthropic` with base URL `/messages`) |
+| `LLM_PROXY_STANDARD` *or* `LLM_PROXY_AIGATEWAY` — `/chat/v1/*` | OpenAI Chat Completions API (`lmChatOpenAi` with `responsesApiEnabled = false`) |
+| `LLM_PROXY_STANDARD` *or* `LLM_PROXY_AIGATEWAY` — `/responses/v1/*` | OpenAI Responses API (`lmChatOpenAi` with `responsesApiEnabled = true`) |
 | `CORTEX_PROXY_SERVICE` — `POST /api/v2/statements` | every SQL statement: DML, Cortex Analyst (`DATA_AGENT_RUN`), Cortex Search (`SEARCH_PREVIEW`), AI functions |
 
 Two consequences worth internalising before you design anything:
@@ -77,7 +77,8 @@ HTTP Request node, `POST` to `http://<proxy-dns-name>:8080/api/v2/statements`, J
 ```
 
 Binding types that matter: `TEXT` for strings, `REAL` for floats, `FIXED` for integers,
-`BOOLEAN`, `DATE`, `TIMESTAMP_NTZ`. Values are always sent as strings.
+`BOOLEAN`, `DATE`, `TIMESTAMP_NTZ`. **Values in `bindings` MUST always be sent as JSON strings**
+(e.g., `"value": "true"`, never raw JSON `true`, which fails with `HTTP 422: Unsupported data type 'java.lang.Boolean'`).
 
 Reading is the same shape with a `SELECT`. The response carries rows in `data`, as an array
 of arrays of strings, and the column names in `resultSetMetaData.rowType`:
@@ -297,16 +298,16 @@ demo that looks broken is actually working correctly.
 
 ## Model inference: LLMs served by Snowflake
 
-With the companion Universal LLM Proxy ([`snowflake-proxy-cortexrestapi`](https://github.com/fbattaglieri-snowflake/snowflake-proxy-cortexrestapi), `LLM_PROXY_STANDARD :8080`), n8n nodes can call Cortex models across all three native protocols. Create three credentials in n8n (using `internal-spcs` as the placeholder API Key, since the proxy injects the SPCS OAuth token):
+With **either** companion Universal LLM Proxy — Option A ([`snowflake-proxy-cortexrestapi`](https://github.com/fbattaglieri-snowflake/snowflake-proxy-cortexrestapi)) **or** Option B ([`snowflake-proxy-cortex-aigateway`](https://github.com/fbattaglieri-snowflake/snowflake-proxy-cortex-aigateway)) — n8n nodes call Cortex models across all three native protocols. Let `ORIGIN` be `http://<your-llm-proxy-dns>:8080` and create three credentials in n8n using `client:n8n-spcs` as the placeholder API Key (on Option B, `client:n8n-spcs` automatically populates `snow-agent-name` in `TABLE(AGENT_TRACE_TABLE('SNOWFLAKE'))`):
 
-1. **Anthropic Messages (`Snowflake Cortex Standard - Messages (/messages)`):**
-   - Credential type: **Anthropic** (`anthropicApi`), Base URL: `http://<llm-proxy-standard-dns>:8080/messages`
+1. **Anthropic Messages (`/messages`):**
+   - Credential type: **Anthropic** (`anthropicApi`), Base URL: `ORIGIN/messages`
    - Node: **Anthropic Chat Model** (`lmChatAnthropic`) — for `claude-sonnet-5-5`, `claude-opus-5-5`, `claude-haiku-5-5`.
-2. **OpenAI Chat Completions (`Snowflake Cortex Standard - Chat (/chat/v1)`):**
-   - Credential type: **OpenAI** (`openAiApi`), Base URL: `http://<llm-proxy-standard-dns>:8080/chat/v1`
+2. **OpenAI Chat Completions (`/chat/v1`):**
+   - Credential type: **OpenAI** (`openAiApi`), Base URL: `ORIGIN/chat/v1`
    - Node: **OpenAI Chat Model** (`lmChatOpenAi`) with **Use Responses API = `OFF`** (`responsesApiEnabled: false`, leave `maxTokens` unset) — for `openai-gpt-6-luna`, `openai-gpt-6-sol`, `grok-4.7`, `grok-4.6`, `glm-5.3`, `kimi-k3`.
-3. **OpenAI Responses (`Snowflake Cortex Standard - Responses (/responses/v1)`):**
-   - Credential type: **OpenAI** (`openAiApi`), Base URL: `http://<llm-proxy-standard-dns>:8080/responses/v1`
+3. **OpenAI Responses (`/responses/v1`):**
+   - Credential type: **OpenAI** (`openAiApi`), Base URL: `ORIGIN/responses/v1`
    - Node: **OpenAI Chat Model** (`lmChatOpenAi`) with **Use Responses API = `ON`** (`responsesApiEnabled: true`) — for `openai-gpt-6.1-terra`, `openai-gpt-6.1-sol`, `openai-gpt-6-astra`.
 
 Prompts, data and answers never leave Snowflake. There is no third-party API key anywhere

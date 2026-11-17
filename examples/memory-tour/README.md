@@ -1,14 +1,19 @@
-# Example: Snowflake Memory Tour
+# Example 1: Snowflake Memory Tour (`examples/memory-tour`)
 
-One n8n workflow that writes to and reads back from every Snowflake memory reachable
-from an SPCS-hosted n8n, then lets an AI Agent reason across all of them with an LLM
-served by Snowflake Cortex through the Universal Multi-API LLM Proxy ([`snowflake-proxy-cortexrestapi`](https://github.com/fbattaglieri-snowflake/snowflake-proxy-cortexrestapi)).
+One self-contained n8n workflow that writes to and reads back from **every Snowflake memory** reachable from an SPCS-hosted n8n instance, then lets an **AI Agent** reason across all of them using an LLM served 100% inside Snowflake.
 
-Nothing in this example calls an external model provider. The prompts, the data, and
-the answers stay inside Snowflake.
+> [!IMPORTANT]
+> **Self-Contained Synthetic Data & Least-Privilege Role Setup**
+> You do **not** have (and do **not** need) the maintainer's Snowflake account to run this example.
+> All required databases, synthetic field-service tickets, synthetic maintenance runbooks, Cortex Search index, Semantic View, Cortex Agent, and the dedicated least-privilege runtime role **`MEMORY_DEMO_ROLE`** are created automatically on **your own Snowflake account** by the scripts in [`sql/`](sql/).
 
-For the patterns behind it, generalised and explained one capability at a time, read
-[`docs/building-workflows.md`](../../docs/building-workflows.md).
+> [!NOTE]
+> **Works with Either Companion LLM Proxy**
+> The `Snowflake LLMs` node (`claude-sonnet-5-5` over `/messages`) works identically against **either**:
+> - **Option A — Cortex REST API Proxy:** [`snowflake-proxy-cortexrestapi`](https://github.com/fbattaglieri-snowflake/snowflake-proxy-cortexrestapi) (`http://<llm-proxy-standard-dns>:8080/messages`)
+> - **Option B — Cortex AI Gateway Proxy:** [`snowflake-proxy-cortex-aigateway`](https://github.com/fbattaglieri-snowflake/snowflake-proxy-cortex-aigateway) (`http://<llm-proxy-aigateway-dns>:8080/messages`), which additionally records OpenTelemetry server spans in `TABLE(AGENT_TRACE_TABLE('SNOWFLAKE'))` and enforces `AI GATEWAY SNOWFLAKE` model allowlists and `SNOWFLAKE.CORE.QUOTA` limits.
+>
+> See [`docs/cortex-proxy.md`](../../docs/cortex-proxy.md) for a full comparison and links to official Snowflake documentation.
 
 ---
 
@@ -38,7 +43,7 @@ flowchart LR
 
     subgraph Phase4["4. AI Agent Over All Three Memories"]
         AGENT["AI Agent through Cortex"]
-        LLM["Snowflake LLMs<br/>(lmChatAnthropic: claude-sonnet-5-5<br/>via LLM_PROXY_STANDARD /messages)"]
+        LLM["Snowflake LLMs<br/>(lmChatAnthropic: claude-sonnet-5-5<br/>via Proxy OR AI Gateway /messages)"]
         MEM["Simple Memory<br/>(keyed on run_id)"]
         T1["ticket_stats<br/>(SQL API Tool)"]
         T2["search_procedures<br/>(Cortex Search Tool)"]
@@ -57,72 +62,69 @@ flowchart LR
 
 ## What It Demonstrates
 
-| Memory | Write | Read |
-|---|---|---|
-| **Standard table** (`MEMORY_DEMO.CORE.SERVICE_TICKETS`) | `INSERT` and `UPDATE` over the Snowflake SQL API (`/api/v2/statements`) | Cortex Analyst in natural language (`SNOWFLAKE.CORTEX.DATA_AGENT_RUN`) |
-| **Document corpus** (`MEMORY_DEMO.CORE.SERVICE_DOCS` + `DOC_SEARCH`) | `INSERT` of a new runbook chunk | Cortex Search (`SNOWFLAKE.CORTEX.SEARCH_PREVIEW`) |
-| **Snowflake Postgres** (`MEMORY_DEMO_PG` / `demo_events`) | `INSERT` and `UPDATE` with the native Postgres node | Plain `SELECT`, no Cortex layer in between |
-| **All three at once** | — | AI Agent with three tools (`ticket_stats`, `search_procedures`, `recent_events`) + `Simple Memory`, powered by `claude-sonnet-5-5` via `LLM_PROXY_STANDARD` (`/messages`) |
+| Memory Layer | Write Path | Read Path | Runtime Role / Auth |
+|---|---|---|---|
+| **Standard Table** (`MEMORY_DEMO.CORE.SERVICE_TICKETS`) | Parameterized `INSERT` and `UPDATE` over `/api/v2/statements` | Natural-language query via Cortex Analyst (`SNOWFLAKE.CORTEX.DATA_AGENT_RUN`) | `MEMORY_DEMO_ROLE` via SPCS OAuth |
+| **Document Corpus** (`MEMORY_DEMO.CORE.SERVICE_DOCS` + `DOC_SEARCH`) | Parameterized `INSERT` of a new runbook chunk | Semantic retrieval via Cortex Search (`SNOWFLAKE.CORTEX.SEARCH_PREVIEW`) | `MEMORY_DEMO_ROLE` via SPCS OAuth |
+| **Snowflake Postgres** (`demo_events`) | Native Postgres `INSERT` and `UPDATE ... RETURNING` | Direct transactional `SELECT` | Postgres credential over TLS (`:5432`) |
+| **Multi-Memory AI Agent** | — | Calls `ticket_stats`, `search_procedures`, and `recent_events` in one reasoning loop (`claude-sonnet-5-5`) | Either Cortex REST API Proxy or Cortex AI Gateway Proxy |
 
 ---
 
-## Why Internal SPCS Proxies Are Used
+## Step-by-Step Setup on Your Snowflake Account
 
-Snowflake forbids programmatic access tokens from inside an SPCS container: a bearer
-PAT is rejected with *"Please use OAuth when connecting to Snowflake from inside a
-container"*. Both internal proxies read the rotating service OAuth token from
-`/snowflake/session/token` on every request:
+### 1. Provision Role, Synthetic Data, Cortex Search, Semantic View & Agent
 
-| Service & Path | Used by |
-|---|---|
-| `LLM_PROXY_STANDARD` — `POST /messages/v1/messages` & `GET /messages/v1/models` | The AI Agent model node (`lmChatAnthropic` with `claude-sonnet-5-5`, or `lmChatOpenAi` on `/chat/v1` and `/responses/v1`) |
-| `CORTEX_PROXY_SERVICE` — `POST /api/v2/statements` | Every SQL statement, including Cortex Analyst (`DATA_AGENT_RUN`) and Cortex Search (`SEARCH_PREVIEW`) |
-
----
-
-## Prerequisites
-
-1. n8n, `LLM_PROXY_STANDARD` ([`snowflake-proxy-cortexrestapi`](https://github.com/fbattaglieri-snowflake/snowflake-proxy-cortexrestapi)), and `CORTEX_PROXY_SERVICE` deployed as described in [`docs/architecture.md`](../../docs/architecture.md).
-2. A Snowflake Postgres instance reachable from the compute pool, with its host on
-   port `5432` present in the egress network rule attached to the n8n service.
-3. Two n8n credentials:
-   - `Snowflake Cortex Standard - Messages (/messages)`, type **Anthropic** (`anthropicApi`), base URL `http://<llm-proxy-standard-dns-name>:8080/messages`, API key `internal-spcs`. See [`docs/cortex-proxy.md`](../../docs/cortex-proxy.md).
-   - `Memory Demo Postgres`, type **Postgres**, SSL on, certificate verification off.
-
----
-
-## Install
+Edit `sql/00_role_and_grants.sql` to uncomment `GRANT ROLE MEMORY_DEMO_ROLE TO ROLE <YOUR_SPCS_SERVICE_OWNER_ROLE>;` so your `CORTEX_PROXY_SERVICE` owner role can execute statements as `MEMORY_DEMO_ROLE`, then run the scripts in order:
 
 ```bash
-snow sql -f sql/10_objects.sql
-snow sql -f sql/20_seed.sql
-snow sql -f sql/30_cortex.sql
-cortex agent-studio agent-deploy --file-path sql/40_agent.yaml \
+# 1. Create least-privilege MEMORY_DEMO_ROLE + Cortex / AI Gateway grants
+snow sql -f examples/memory-tour/sql/00_role_and_grants.sql
+
+# 2. Create MEMORY_DEMO database, MEMORY_DEMO_WH warehouse, tables & table grants
+snow sql -f examples/memory-tour/sql/10_objects.sql
+
+# 3. Load deterministic synthetic seed data (30 field-service tickets + 8 safety/maintenance docs)
+snow sql -f examples/memory-tour/sql/20_seed.sql
+
+# 4. Create Cortex Search service (DOC_SEARCH) & Semantic View (TICKETS_ANALYTICS) + grants
+snow sql -f examples/memory-tour/sql/30_cortex.sql
+
+# 5. Deploy the Cortex Agent for Cortex Analyst text-to-SQL and grant USAGE to MEMORY_DEMO_ROLE
+cortex agent-studio agent-deploy --file-path examples/memory-tour/sql/40_agent.yaml \
   --fqn MEMORY_DEMO.CORE.MEMORY_DEMO_AGENT
+snow sql -f examples/memory-tour/sql/50_grant_agent.sql
 ```
 
-Then import `workflow.json` into n8n and replace the placeholders:
+### 2. Import `workflow.json` into n8n & Bind Your Credentials
 
-| Placeholder | Where to find the real value |
+Import [`workflow.json`](workflow.json) into n8n and replace the three placeholders:
+
+| Placeholder | Value on Your Deployment |
 |---|---|
-| `CORTEX_PROXY_DNS_NAME` | `SHOW SERVICES LIKE 'CORTEX_PROXY_SERVICE'`, column `dns_name` |
-| `REPLACE_WITH_YOUR_ANTHROPIC_CREDENTIAL_ID` | the ID of your `Snowflake Cortex Standard - Messages (/messages)` credential |
-| `REPLACE_WITH_YOUR_POSTGRES_CREDENTIAL_ID` | the ID of your Postgres credential |
+| `CORTEX_PROXY_DNS_NAME` | Internal DNS name from `SHOW SERVICES LIKE 'CORTEX_PROXY_SERVICE'` (`dns_name` column) |
+| `REPLACE_WITH_YOUR_ANTHROPIC_CREDENTIAL_ID` | Credential ID of your **Anthropic** (`/messages`) credential pointing to **either** `llm-proxy-standard:8080/messages` **or** `llm-proxy-aigateway:8080/messages` (`API Key = client:n8n-spcs`) |
+| `REPLACE_WITH_YOUR_POSTGRES_CREDENTIAL_ID` | Credential ID of your Snowflake Postgres credential (SSL enabled, certificate verification off) |
 
-The Postgres table is created by the workflow itself with `CREATE TABLE IF NOT EXISTS`, so there is no manual DDL step on the Postgres side.
-
----
-
-## Running It
-
-Click **Execute workflow**, or `POST` to the `memory-tour` webhook. A run takes about
-90–100 seconds (70 seconds of which is the deliberate `Wait for search lag` node so `DOC_SEARCH` indexes the newly inserted runbook chunk). The final Code node outputs a structured report verifying all four stages.
+> The Postgres `demo_events` table is created idempotently at runtime (`CREATE TABLE IF NOT EXISTS demo_events ...`), so no manual DDL step is required on Postgres.
 
 ---
 
-## Key Operational Notes
+## Running & Verifying the Tour
 
-- **Cortex Search has a target lag.** `DOC_SEARCH` is created with `TARGET_LAG = '1 minute'`, and the workflow waits 70 seconds before searching so it can retrieve the chunk written earlier in the same execution.
-- **Parameter binding is mandatory.** Concatenating values into SQL statements fails with `HTTP 422` as soon as a value contains an apostrophe.
-- **Use the tool variants of regular nodes.** Use `n8n-nodes-base.httpRequestTool` and `n8n-nodes-base.postgresTool` with `$fromAI(...)` parameters.
-- **`Simple Memory` requires an explicit session key.** In non-chat workflows, set `sessionIdType: "customKey"` (keyed on `run_id` here).
+Click **Execute workflow** in n8n (or send `POST /webhook/memory-tour`). Execution takes ~95 seconds because `Wait for search lag` pauses 70 seconds to let `DOC_SEARCH` (`TARGET_LAG = '1 minute'`) index the runbook chunk written earlier in the same run.
+
+When routed through **Cortex AI Gateway Proxy** (`snowflake-proxy-cortex-aigateway`), you can also inspect the multi-turn agent spans in Snowflake immediately after completion:
+
+```sql
+SELECT
+  TIMESTAMP,
+  TRACE:"trace_id"::STRING AS TRACE_ID,
+  RECORD:"name"::STRING AS SPAN_NAME,
+  RECORD_ATTRIBUTES:"http.request.header.snow-agent-name"::STRING AS AGENT_NAME,
+  RECORD_ATTRIBUTES:"gen_ai.usage.input_tokens"::INT AS INPUT_TOKENS,
+  RECORD_ATTRIBUTES:"gen_ai.usage.output_tokens"::INT AS OUTPUT_TOKENS
+FROM TABLE(AGENT_TRACE_TABLE('SNOWFLAKE'))
+ORDER BY TIMESTAMP DESC
+LIMIT 5;
+```

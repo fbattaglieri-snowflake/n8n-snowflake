@@ -1,0 +1,1018 @@
+{
+  "name": "LLM_Options",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -224,
+        -96
+      ],
+      "id": "manual-trigger-llm-opt",
+      "name": "When clicking Execute workflow"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://CORTEX_PROXY_DNS_NAME:8080/api/v2/statements",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "{\"Content-Type\": \"application/json\"}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"statement\": \"SELECT SNOWFLAKE.CORTEX.DATA_AGENT_RUN('LLM_OPTIONS_DEMO.CORE.PLATFORM_DOCS_AGENT', '{\\\"messages\\\":[{\\\"role\\\":\\\"user\\\",\\\"content\\\":[{\\\"type\\\":\\\"text\\\",\\\"text\\\":\\\"Which regions have the highest total revenue potential, and what are the top 3 high-priority assets?\\\"}]}]}') AS data\", \"warehouse\": \"LLM_OPTIONS_DEMO_WH\", \"database\": \"LLM_OPTIONS_DEMO\", \"schema\": \"CORE\", \"role\": \"N8N_DEMO_ROLE\", \"timeout\": 120}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        128,
+        -240
+      ],
+      "id": "http-cortex-agent",
+      "name": "Call Cortex Agent via SQL API",
+      "retryOnFail": true,
+      "notes": "Calls Snowflake Cortex Agent via SPCS SQL API proxy using N8N_DEMO_ROLE (zero static PATs)."
+    },
+    {
+      "parameters": {
+        "batching": {},
+        "hasOutputParser": false,
+        "messages": {
+          "messageValues": []
+        },
+        "promptType": "define",
+        "text": "=Summarize this statement in 3 concise bullet points: {{ $json.data ?? \"Snowflake Cortex AI Gateway centralizes governance, model allowlists, per-user quotas, and OpenTelemetry traces inside Snowflake.\" }}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        64,
+        -640
+      ],
+      "id": "basic-llm-chain",
+      "name": "Basic LLM Chain (External API)",
+      "onError": "continueRegularOutput",
+      "disabled": true,
+      "notes": "Optional external API example via EAI (disabled by default so workflow runs 100% inside Snowflake out of the box)."
+    },
+    {
+      "parameters": {
+        "model": "nvidia/nemotron-3.5-super-vl-120b-a12b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatNvidia",
+      "typeVersion": 1,
+      "position": [
+        64,
+        -448
+      ],
+      "id": "nvidia-nemotron-model",
+      "name": "NVIDIA Nemotron Chat Model",
+      "credentials": {
+        "nvidiaApi": {
+          "id": "REPLACE_WITH_NVIDIA_CREDENTIAL_ID",
+          "name": "External NVIDIA NIM API (Optional)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "description": "Use this deterministic helper tool whenever the prompt asks you to run a tool check.",
+        "jsCode": "return JSON.stringify({ status: \"ok\", query: query || \"\" });"
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.3,
+      "position": [
+        272,
+        688
+      ],
+      "id": "code-tool-ollama",
+      "name": "Code Tool"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "SessionID_Std_Messages",
+        "contextWindowLength": 20
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        144,
+        192
+      ],
+      "id": "mem-std-msg",
+      "name": "Simple Memory1"
+    },
+    {
+      "parameters": {
+        "description": "Deterministic verification tool used to exercise multi-turn tool calling and ReplayCache.",
+        "jsCode": "return JSON.stringify({ status: \"ok\", query: query || \"\" });"
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.3,
+      "position": [
+        592,
+        240
+      ],
+      "id": "code-tool-shared",
+      "name": "Code Tool1"
+    },
+    {
+      "parameters": {
+        "color": 4,
+        "content": "## Option A — Cortex REST API Proxy (SPCS)\nEndpoint: `http://<LLM_PROXY_STANDARD_DNS>:8080`\nUpstream: `/api/v2/cortex/v1`\n- **Messages API (`/messages`)**: `claude-sonnet-5-5`, `claude-opus-5-5`, `claude-haiku-5-5`\n- **Chat API (`/chat/v1`)**: `openai-gpt-6-luna`, `openai-gpt-6-sol`, `grok-4.7`, `glm-5.3`, `kimi-k3`\n- **Responses API (`/responses/v1`)**: `openai-gpt-6.1-terra`, `openai-gpt-6.1-sol`, `openai-gpt-6-astra`",
+        "height": 280,
+        "width": 352
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -560,
+        -48
+      ],
+      "typeVersion": 1,
+      "id": "note-opt-a",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "Call Code Tool1 with query \"ping-rest-messages\" and summarize in one sentence what you can do.",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        64,
+        -48
+      ],
+      "id": "agent-std-msg",
+      "name": "AI Agent through Cortex Rest API",
+      "retryOnFail": true,
+      "notes": "Agent using Cortex REST API Proxy /messages (claude-sonnet-5-5)."
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "Explain in one sentence how open-weights models run on SPCS GPU compute pools.",
+        "options": {
+          "enableStreaming": true
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        64,
+        464
+      ],
+      "id": "agent-ollama-gpu",
+      "name": "Self-Hosted GPU Agent (Ollama)",
+      "retryOnFail": true,
+      "disabled": true,
+      "notes": "Optional self-hosted SPCS GPU branch (disabled by default so GPU compute pool stays suspended)."
+    },
+    {
+      "parameters": {
+        "color": 3,
+        "content": "## Option C — Self-Hosted LLM on SPCS GPU Pool (Optional)\nRuns Ollama (`ollama-service:11434`) on a Snowflake GPU compute pool (`GPU_NV_S`). Disabled by default so you can run without a GPU pool or keep your GPU pool suspended.",
+        "height": 240,
+        "width": 352
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -560,
+        512
+      ],
+      "typeVersion": 1,
+      "id": "note-opt-c",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "color": 5,
+        "content": "## Option D — Cortex Agent via SPCS SQL API\nCalls `SNOWFLAKE.CORTEX.DATA_AGENT_RUN` via `CORTEX_PROXY_DNS_NAME:8080/api/v2/statements` (rotating SPCS OAuth token, least-privilege `N8N_DEMO_ROLE`) and extracts the clean final answer.",
+        "height": 240,
+        "width": 352
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -560,
+        -352
+      ],
+      "typeVersion": 1,
+      "id": "note-opt-d",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first().json.data;\n\n// Path 1: Snowflake SQL API /api/v2/statements -> data: [[ \"<DATA_AGENT_RUN JSON>\" ]]\nif (Array.isArray(raw)) {\n  const cell = raw[0]?.[0] ?? '';\n  try {\n    const parsed = typeof cell === 'string' ? JSON.parse(cell) : cell;\n    const texts = (parsed?.content || [])\n      .filter(b => b && b.type === 'text' && b.text)\n      .map(b => b.text);\n    return [{ json: { response: texts.join('\\n\\n').trim() } }];\n  } catch {\n    return [{ json: { response: String(cell) } }];\n  }\n}\n\n// Path 2: Direct Cortex Agent REST SSE stream\nconst sseText = String(raw ?? '');\nconst answer = [];\nfor (const block of sseText.replace(/\\r\\n/g, '\\n').split(/\\n\\n+/)) {\n  let eventType = '';\n  let eventData = '';\n  for (const line of block.split('\\n')) {\n    if (line.startsWith('event: ')) eventType = line.slice(7).trim();\n    if (line.startsWith('data: '))  eventData = line.slice(6).trim();\n  }\n  if (eventType !== 'response.text.delta') continue;\n  try {\n    const parsed = JSON.parse(eventData);\n    if (parsed.text) answer.push(parsed.text);\n  } catch { continue; }\n}\nreturn [{ json: { response: answer.join('').trim() } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        528,
+        -144
+      ],
+      "id": "clean-agent-response",
+      "name": "Clean Cortex Agent Response"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "llama3.1:8b",
+          "mode": "list",
+          "cachedResultName": "llama3.1:8b"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Extract only the final answer without intermediate reasoning steps: {{ $json.data }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.ollama",
+      "typeVersion": 1,
+      "position": [
+        464,
+        -336
+      ],
+      "id": "ollama-postprocess",
+      "name": "Post-Process via Ollama (Optional)",
+      "credentials": {
+        "ollamaApi": {
+          "id": "REPLACE_WITH_OLLAMA_CREDENTIAL_ID",
+          "name": "SPCS Ollama GPU Service (Optional)"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "color": 2,
+        "content": "## Option E — External LLM API via EAI (Optional)\nCalls external model APIs (e.g., NVIDIA NIM) egressing through a governed Snowflake External Access Integration (`EAI`). Disabled by default.",
+        "height": 224,
+        "width": 352
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -560,
+        -640
+      ],
+      "typeVersion": 1,
+      "id": "note-opt-e",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "SessionID_Ollama",
+        "contextWindowLength": 20
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        144,
+        688
+      ],
+      "id": "mem-ollama",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "model": "llama3.1:8b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        16,
+        688
+      ],
+      "id": "model-ollama",
+      "name": "Ollama Chat",
+      "credentials": {
+        "ollamaApi": {
+          "id": "REPLACE_WITH_OLLAMA_CREDENTIAL_ID",
+          "name": "SPCS Ollama GPU Service (Optional)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM LLM_OPTIONS_DEMO.CORE.FLEET_OPPORTUNITIES ORDER BY RANK LIMIT 10;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.snowflake",
+      "typeVersion": 1.1,
+      "position": [
+        960,
+        -416
+      ],
+      "id": "sf-query-table",
+      "name": "Snowflake (Query Synthetic Fleet)",
+      "credentials": {
+        "snowflake": {
+          "id": "REPLACE_WITH_SNOWFLAKE_CREDENTIAL_ID",
+          "name": "Snowflake Account (SPCS OAuth)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SHOW MODELS IN SNOWFLAKE.MODELS;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.snowflake",
+      "typeVersion": 1.1,
+      "position": [
+        960,
+        -96
+      ],
+      "id": "sf-show-models",
+      "name": "Snowflake (SHOW MODELS)",
+      "credentials": {
+        "snowflake": {
+          "id": "REPLACE_WITH_SNOWFLAKE_CREDENTIAL_ID",
+          "name": "Snowflake Account (SPCS OAuth)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT AI_COMPLETE('claude-haiku-5-5', 'Summarize in one sentence how Snowflake Cortex keeps LLM inference inside the data governance boundary.') AS RESPONSE;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.snowflake",
+      "typeVersion": 1.1,
+      "position": [
+        960,
+        176
+      ],
+      "id": "sf-ai-complete",
+      "name": "Snowflake (AI_COMPLETE SQL)",
+      "credentials": {
+        "snowflake": {
+          "id": "REPLACE_WITH_SNOWFLAKE_CREDENTIAL_ID",
+          "name": "Snowflake Account (SPCS OAuth)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "id",
+          "value": "claude-sonnet-5-5"
+        },
+        "options": {
+          "maxTokensToSample": 4096
+        }
+      },
+      "id": "model-std-msg",
+      "name": "Snowflake LLMs (Messages API)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.6,
+      "position": [
+        16,
+        192
+      ],
+      "credentials": {
+        "anthropicApi": {
+          "id": "REPLACE_WITH_CORTEX_REST_MESSAGES_CREDENTIAL_ID",
+          "name": "Snowflake Cortex Standard - Messages (/messages)"
+        }
+      },
+      "notes": "Cortex REST API Proxy — Anthropic Messages API (/messages) with claude-sonnet-5-5."
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "Call Code Tool1 with query \"ping-rest-chat\" and summarize in one sentence what you can do.",
+        "options": {}
+      },
+      "id": "agent-std-chat",
+      "name": "AI Agent Cortex Chat API",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        592,
+        432
+      ],
+      "notes": "Agent using Cortex REST API Proxy /chat/v1 (openai-gpt-6-luna)."
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "id",
+          "value": "openai-gpt-6-luna"
+        },
+        "responsesApiEnabled": false,
+        "options": {}
+      },
+      "id": "model-std-chat",
+      "name": "Snowflake LLMs (Chat API)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        592,
+        656
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "REPLACE_WITH_CORTEX_REST_CHAT_CREDENTIAL_ID",
+          "name": "Snowflake Cortex Standard - Chat (/chat/v1)"
+        }
+      },
+      "notes": "Cortex REST API Proxy — OpenAI Chat Completions API (/chat/v1) with openai-gpt-6-luna."
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "SessionID_Chat",
+        "contextWindowLength": 20
+      },
+      "id": "mem-std-chat",
+      "name": "Simple Memory Chat",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        720,
+        672
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "Call Code Tool1 with query \"ping-rest-responses\" and summarize in one sentence what you can do.",
+        "options": {}
+      },
+      "id": "agent-std-resp",
+      "name": "AI Agent Cortex Responses API",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1104,
+        416
+      ],
+      "notes": "Agent using Cortex REST API Proxy /responses/v1 (openai-gpt-6.1-terra)."
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "id",
+          "value": "openai-gpt-6.1-terra"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "model-std-resp",
+      "name": "Snowflake LLMs (Responses API)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        1024,
+        688
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "REPLACE_WITH_CORTEX_REST_RESPONSES_CREDENTIAL_ID",
+          "name": "Snowflake Cortex Standard - Responses (/responses/v1)"
+        }
+      },
+      "notes": "Cortex REST API Proxy — OpenAI Responses API (/responses/v1) with openai-gpt-6.1-terra."
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "SessionID_Responses",
+        "contextWindowLength": 20
+      },
+      "id": "mem-std-resp",
+      "name": "Simple Memory Responses",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        1200,
+        704
+      ]
+    },
+    {
+      "id": "note-opt-b",
+      "name": "Sticky Note4",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -560,
+        944
+      ],
+      "parameters": {
+        "color": 6,
+        "content": "## Option B — Cortex AI Gateway Proxy (SPCS)\nEndpoint: `http://<LLM_PROXY_AIGATEWAY_DNS>:8080`\nUpstream: `/api/v2/aigateways/snowflake/v1`\n- Enforces `AI GATEWAY SNOWFLAKE` model allowlists & `SNOWFLAKE.CORE.QUOTA` limits\n- Emits W3C `traceparent` + `snow-agent-name` spans into `TABLE(AGENT_TRACE_TABLE('SNOWFLAKE'))`\n- Supports **Messages (`/messages`)**, **Chat (`/chat/v1`)**, and **Responses (`/responses/v1`)**",
+        "height": 288,
+        "width": 352
+      }
+    },
+    {
+      "id": "note-opt-f",
+      "name": "Sticky Note5",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        912,
+        -640
+      ],
+      "parameters": {
+        "color": 5,
+        "content": "## Option F — Native Snowflake Node\nExecutes SQL against `LLM_OPTIONS_DEMO.CORE.FLEET_OPPORTUNITIES`, `SHOW MODELS`, and `AI_COMPLETE(...)` via SPCS OAuth (`N8N_DEMO_ROLE`).",
+        "height": 192,
+        "width": 320
+      }
+    },
+    {
+      "id": "agent-gw-msg",
+      "name": "AI Agent AI Gateway Messages API",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        64,
+        960
+      ],
+      "parameters": {
+        "options": {},
+        "promptType": "define",
+        "text": "Call Code Tool1 with query \"ping-aigateway-messages\" and summarize in one sentence what you can do."
+      },
+      "notes": "Agent using Cortex AI Gateway Proxy /messages (claude-sonnet-5-5) with tool call + ReplayCache.",
+      "retryOnFail": true
+    },
+    {
+      "id": "model-gw-msg",
+      "name": "Snowflake AI Gateway (Messages API)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.6,
+      "position": [
+        16,
+        1200
+      ],
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "id",
+          "value": "claude-sonnet-5-5"
+        },
+        "options": {
+          "maxTokensToSample": 4096
+        }
+      },
+      "credentials": {
+        "anthropicApi": {
+          "id": "REPLACE_WITH_AI_GATEWAY_MESSAGES_CREDENTIAL_ID",
+          "name": "Snowflake Cortex AI Gateway - Messages (/messages)"
+        }
+      },
+      "notes": "Cortex AI Gateway Proxy — Anthropic Messages API (/messages) with claude-sonnet-5-5."
+    },
+    {
+      "id": "mem-gw-msg",
+      "name": "Simple Memory GW Messages",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        176,
+        1200
+      ],
+      "parameters": {
+        "contextWindowLength": 20,
+        "sessionIdType": "customKey",
+        "sessionKey": "SessionID_GW_Messages"
+      }
+    },
+    {
+      "id": "agent-gw-chat",
+      "name": "AI Agent AI Gateway Chat API",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        592,
+        960
+      ],
+      "parameters": {
+        "options": {},
+        "promptType": "define",
+        "text": "Call Code Tool1 with query \"ping-aigateway-chat\" and summarize in one sentence what you can do."
+      },
+      "notes": "Agent using Cortex AI Gateway Proxy /chat/v1 (openai-gpt-6-luna) with tool call.",
+      "retryOnFail": true
+    },
+    {
+      "id": "model-gw-chat",
+      "name": "Snowflake AI Gateway (Chat API)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        560,
+        1200
+      ],
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "id",
+          "value": "openai-gpt-6-luna"
+        },
+        "options": {},
+        "responsesApiEnabled": false
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "REPLACE_WITH_AI_GATEWAY_CHAT_CREDENTIAL_ID",
+          "name": "Snowflake Cortex AI Gateway - Chat (/chat/v1)"
+        }
+      },
+      "notes": "Cortex AI Gateway Proxy — OpenAI Chat Completions API (/chat/v1) with openai-gpt-6-luna."
+    },
+    {
+      "id": "mem-gw-chat",
+      "name": "Simple Memory GW Chat",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        736,
+        1200
+      ],
+      "parameters": {
+        "contextWindowLength": 20,
+        "sessionIdType": "customKey",
+        "sessionKey": "SessionID_GW_Chat"
+      }
+    },
+    {
+      "id": "agent-gw-resp",
+      "name": "AI Agent AI Gateway Responses API",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1104,
+        960
+      ],
+      "parameters": {
+        "options": {},
+        "promptType": "define",
+        "text": "Call Code Tool1 with query \"ping-aigateway-responses\" and summarize in one sentence what you can do."
+      },
+      "notes": "Agent using Cortex AI Gateway Proxy /responses/v1 (openai-gpt-6.1-terra) with tool call + ReplayCache.",
+      "retryOnFail": true
+    },
+    {
+      "id": "model-gw-resp",
+      "name": "Snowflake AI Gateway (Responses API)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        1056,
+        1200
+      ],
+      "parameters": {
+        "builtInTools": {},
+        "model": {
+          "__rl": true,
+          "mode": "id",
+          "value": "openai-gpt-6.1-terra"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "REPLACE_WITH_AI_GATEWAY_RESPONSES_CREDENTIAL_ID",
+          "name": "Snowflake Cortex AI Gateway - Responses (/responses/v1)"
+        }
+      },
+      "notes": "Cortex AI Gateway Proxy — OpenAI Responses API (/responses/v1) with openai-gpt-6.1-terra."
+    },
+    {
+      "id": "mem-gw-resp",
+      "name": "Simple Memory GW Responses",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        1232,
+        1200
+      ],
+      "parameters": {
+        "contextWindowLength": 20,
+        "sessionIdType": "customKey",
+        "sessionKey": "SessionID_GW_Responses"
+      }
+    }
+  ],
+  "connections": {
+    "When clicking Execute workflow": {
+      "main": [
+        [
+          {
+            "node": "Call Cortex Agent via SQL API",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "AI Agent through Cortex Rest API",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Self-Hosted GPU Agent (Ollama)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Basic LLM Chain (External API)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "AI Agent Cortex Chat API",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "AI Agent Cortex Responses API",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Snowflake (Query Synthetic Fleet)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Snowflake (SHOW MODELS)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Snowflake (AI_COMPLETE SQL)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "AI Agent AI Gateway Messages API",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "AI Agent AI Gateway Chat API",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "AI Agent AI Gateway Responses API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Cortex Agent via SQL API": {
+      "main": [
+        [
+          {
+            "node": "Clean Cortex Agent Response",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Post-Process via Ollama (Optional)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "NVIDIA Nemotron Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain (External API)",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code Tool": {
+      "ai_tool": [
+        [
+          {
+            "node": "Self-Hosted GPU Agent (Ollama)",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory1": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent through Cortex Rest API",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code Tool1": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent through Cortex Rest API",
+            "type": "ai_tool",
+            "index": 0
+          },
+          {
+            "node": "AI Agent Cortex Chat API",
+            "type": "ai_tool",
+            "index": 0
+          },
+          {
+            "node": "AI Agent Cortex Responses API",
+            "type": "ai_tool",
+            "index": 0
+          },
+          {
+            "node": "AI Agent AI Gateway Messages API",
+            "type": "ai_tool",
+            "index": 0
+          },
+          {
+            "node": "AI Agent AI Gateway Chat API",
+            "type": "ai_tool",
+            "index": 0
+          },
+          {
+            "node": "AI Agent AI Gateway Responses API",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Self-Hosted GPU Agent (Ollama)",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Chat": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Self-Hosted GPU Agent (Ollama)",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Snowflake LLMs (Messages API)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent through Cortex Rest API",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Snowflake LLMs (Chat API)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent Cortex Chat API",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory Chat": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent Cortex Chat API",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Snowflake LLMs (Responses API)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent Cortex Responses API",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory Responses": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent Cortex Responses API",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Snowflake AI Gateway (Messages API)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent AI Gateway Messages API",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory GW Messages": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent AI Gateway Messages API",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Snowflake AI Gateway (Chat API)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent AI Gateway Chat API",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory GW Chat": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent AI Gateway Chat API",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Snowflake AI Gateway (Responses API)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent AI Gateway Responses API",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory GW Responses": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent AI Gateway Responses API",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

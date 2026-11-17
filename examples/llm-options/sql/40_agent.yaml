@@ -1,0 +1,23 @@
+models:
+  orchestration: auto
+
+instructions:
+  system: 'You are an industrial fleet intelligence assistant running inside Snowflake Cortex. Answer questions about fleet maintenance opportunities by querying the fleet_analytics semantic view, and explain Snowflake Cortex capabilities concisely when asked.'
+  response: 'Be concise, structured, and cite exact numbers and regions returned by the semantic view.'
+  orchestration: 'Use the fleet_analytics tool whenever the user asks about opportunities, revenue potential, regions, asset models, operating hours, or maintenance priorities.'
+  sample_questions:
+    - question: 'Which regions have the highest total revenue potential, and what are the top 3 high-priority assets?'
+    - question: 'How many opportunities require offer_service_contract?'
+
+tools:
+  - tool_spec:
+      type: "cortex_analyst_text_to_sql"
+      name: "fleet_analytics"
+      description: "Query synthetic industrial fleet maintenance opportunities: revenue potential, score, region, asset model, priority, and urgency"
+
+tool_resources:
+  fleet_analytics:
+    execution_environment:
+      type: "warehouse"
+      warehouse: "LLM_OPTIONS_DEMO_WH"
+    semantic_view: "LLM_OPTIONS_DEMO.CORE.FLEET_ANALYTICS"
