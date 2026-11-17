@@ -1,5 +1,8 @@
--- Deterministic seed for MEMORY_DEMO. Values are fixed so that Cortex Analyst
--- answers can be checked against a known ground truth.
+-- Deterministic synthetic seed for MEMORY_DEMO.
+-- Safe to re-run: deletes previous 'seed' rows before inserting the synthetic baseline.
+
+DELETE FROM MEMORY_DEMO.CORE.SERVICE_TICKETS WHERE RUN_ID = 'seed';
+DELETE FROM MEMORY_DEMO.CORE.SERVICE_DOCS WHERE RUN_ID = 'seed';
 
 INSERT INTO MEMORY_DEMO.CORE.SERVICE_TICKETS
     (TICKET_ID, RUN_ID, SITE, ASSET, SEVERITY, STATUS, SENTIMENT_SCORE, NOTE, SOURCE, CREATED_AT)
