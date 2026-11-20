@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - uses: snowflakedb/snowflake-actions@v3
+      - uses: snowflakedb/snowflake-actions@39282d1b227a23e62b8bf4884d424eee3f64b123 # v3
         with:
           use-oidc: true
           cli-version: "3.16"

@@ -21,11 +21,11 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - uses: docker/setup-buildx-action@v4
-      - uses: snowflakedb/snowflake-actions@v3
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - uses: snowflakedb/snowflake-actions@39282d1b227a23e62b8bf4884d424eee3f64b123 # v3
         with:
           use-oidc: true
           cli-version: "3.16"
@@ -46,7 +46,8 @@ jobs:
           snow spcs image-registry token -x --format JSON \
             | python -c 'import json,sys; print(json.load(sys.stdin)[0]["token"])' \
             | docker login "$registry" -u 0sessiontoken --password-stdin
-      - name: Build and push immutable images
+      - name: Build images locally
+        id: images
         env:
           REGISTRY: ${{ steps.registry.outputs.registry }}
           DATABASE: ${{ vars.SNOWFLAKE_DATABASE }}
@@ -54,14 +55,38 @@ jobs:
           N8N_REPOSITORY: ${{ vars.N8N_IMAGE_REPOSITORY }}
           PROXY_REPOSITORY: ${{ vars.CORTEX_PROXY_IMAGE_REPOSITORY }}
           IMAGE_TAG: ${{ github.sha }}
+          N8N_VERSION: ${{ inputs.n8n_version }}
         run: |
-          docker buildx build --platform linux/amd64 --push \
-            --build-arg "N8N_VERSION=${{ inputs.n8n_version }}" \
-            -t "${REGISTRY}/${DATABASE,,}/${SCHEMA,,}/${N8N_REPOSITORY,,}/n8n:${IMAGE_TAG}" \
-            docker/n8n
-          docker buildx build --platform linux/amd64 --push \
-            -t "${REGISTRY}/${DATABASE,,}/${SCHEMA,,}/${PROXY_REPOSITORY,,}/cortex-proxy:${IMAGE_TAG}" \
-            proxy/cortex
+          n8n_image="${REGISTRY}/${DATABASE,,}/${SCHEMA,,}/${N8N_REPOSITORY,,}/n8n:${IMAGE_TAG}"
+          proxy_image="${REGISTRY}/${DATABASE,,}/${SCHEMA,,}/${PROXY_REPOSITORY,,}/cortex-proxy:${IMAGE_TAG}"
+          docker buildx build --platform linux/amd64 --load \
+            --build-arg "N8N_VERSION=${N8N_VERSION}" -t "$n8n_image" docker/n8n
+          docker buildx build --platform linux/amd64 --load -t "$proxy_image" proxy/cortex
+          echo "n8n=$n8n_image" >> "$GITHUB_OUTPUT"
+          echo "proxy=$proxy_image" >> "$GITHUB_OUTPUT"
+      - name: Scan n8n image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ steps.images.outputs.n8n }}
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+      - name: Scan Cortex proxy image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ steps.images.outputs.proxy }}
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+      - name: Push scanned images
+        env:
+          N8N_IMAGE: ${{ steps.images.outputs.n8n }}
+          PROXY_IMAGE: ${{ steps.images.outputs.proxy }}
+        run: |
+          docker push "$N8N_IMAGE"
+          docker push "$PROXY_IMAGE"
       - name: Stage specifications and model catalog
         env:
           SNOWFLAKE_ACCOUNT: ${{ vars.SNOWFLAKE_ACCOUNT }}
