@@ -1,5 +1,9 @@
 FROM python:3.12-slim
 
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY cortex_proxy.py /opt/cortex_proxy.py
 COPY models.json /opt/models.json
 

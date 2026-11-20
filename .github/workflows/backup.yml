@@ -16,14 +16,14 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - uses: snowflakedb/snowflake-actions@v3
+      - uses: snowflakedb/snowflake-actions@39282d1b227a23e62b8bf4884d424eee3f64b123 # v3
         with:
           use-oidc: true
           cli-version: "3.16"
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: "3.12"
       - name: Export n8n workflows to stage
@@ -48,9 +48,10 @@ jobs:
             | python3 -c 'import json,sys; print(json.load(sys.stdin)[0]["token"])')
 
           TIMESTAMP=$(date -u +%Y%m%dT%H%M%SZ)
+          export ENDPOINT TOKEN TIMESTAMP
 
           python3 -c "
-          import urllib.request, json, os, sys
+          import urllib.parse, urllib.request, json, os, sys
 
           endpoint = os.environ['ENDPOINT']
           token = os.environ['TOKEN']
@@ -58,17 +59,25 @@ jobs:
           out_dir = '/tmp/n8n_backup'
           os.makedirs(out_dir, exist_ok=True)
 
-          # Fetch all workflows via n8n REST API
-          url = f'https://{endpoint}/api/v1/workflows?limit=250'
-          req = urllib.request.Request(url, headers={'Authorization': f'Bearer {token}'})
-          try:
-              with urllib.request.urlopen(req) as resp:
-                  data = json.loads(resp.read())
-          except Exception as e:
-              print(f'::warning::Could not reach n8n API: {e}')
-              sys.exit(0)
+          # Fetch all workflows via n8n REST API, following the pagination cursor
+          workflows = []
+          cursor = None
+          while True:
+              url = f'https://{endpoint}/api/v1/workflows?limit=250'
+              if cursor:
+                  url += '&cursor=' + urllib.parse.quote(cursor)
+              req = urllib.request.Request(url, headers={'Authorization': f'Bearer {token}'})
+              try:
+                  with urllib.request.urlopen(req) as resp:
+                      data = json.loads(resp.read())
+              except Exception as e:
+                  print(f'::warning::Could not reach n8n API: {e}')
+                  sys.exit(0)
+              workflows.extend(data.get('data', []))
+              cursor = data.get('nextCursor')
+              if not cursor:
+                  break
 
-          workflows = data.get('data', [])
           print(f'Exporting {len(workflows)} workflows')
 
           for wf in workflows:

@@ -16,10 +16,10 @@ jobs:
     runs-on: ubuntu-latest
     environment: bootstrap
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - uses: snowflakedb/snowflake-actions@v3
+      - uses: snowflakedb/snowflake-actions@39282d1b227a23e62b8bf4884d424eee3f64b123 # v3
         with:
           use-oidc: true
           cli-version: "3.16"
