@@ -17,6 +17,8 @@ FROM n8nio/n8n:${N8N_VERSION}
 
 USER root
 
+RUN apk upgrade --no-cache
+
 COPY --from=python /usr/bin/python3 /usr/bin/python3
 COPY --from=python /usr/lib/python3.14 /usr/lib/python3.14
 COPY --from=python /usr/lib/libpython3.14.so.1.0 /usr/lib/libpython3.14.so.1.0
